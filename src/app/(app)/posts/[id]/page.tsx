@@ -1,12 +1,13 @@
 "use client"
 
 import { use, useCallback, useEffect, useRef, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
-import { ArrowLeft, Copy, Download, ImageOff } from "lucide-react"
+import { ArrowLeft, Copy, Download, ImageOff, Loader2, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import { GeneratingAnimation } from "@/components/app/generating-animation"
 import { cn } from "@/lib/utils"
@@ -30,6 +31,7 @@ interface Post {
   aspectRatio: string
   slideCount: number
   withSubject: boolean
+  colorPalette: string[]
   createdAt: string
   slides: Slide[]
 }
@@ -63,9 +65,11 @@ async function getPost(id: string): Promise<Post | null> {
 
 export default function PostDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
+  const router = useRouter()
   const [post, setPost] = useState<Post | null>(null)
   const [identity, setIdentity] = useState<Identity | null>(null)
   const [loading, setLoading] = useState(true)
+  const [regenerating, setRegenerating] = useState(false)
   const [activeSlide, setActiveSlide] = useState(0)
   const [generatingSlides, setGeneratingSlides] = useState<Set<string>>(new Set())
   const generationStarted = useRef(false)
@@ -202,6 +206,44 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
     }
   }, [identity])
 
+  async function handleRegenerate() {
+    if (!post || regenerating) return
+    setRegenerating(true)
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          brief: post.brief,
+          aspectRatio: post.aspectRatio,
+          language: post.language,
+          slideCount: post.slideCount,
+          withSubject: post.withSubject,
+          vibe: post.vibe,
+          colorPalette: post.colorPalette,
+        }),
+      })
+
+      if (res.status === 403) {
+        toast.error("free limit reached — upgrade to pro or add your api key")
+        router.push("/billing")
+        return
+      }
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.detail || err.error || "generation failed")
+      }
+
+      const data = await res.json()
+      router.push(`/posts/${data.postId}`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "regeneration failed")
+    } finally {
+      setRegenerating(false)
+    }
+  }
+
   if (loading) return (
     <div className="space-y-4 max-w-4xl">
       <div className="h-8 w-48 rounded bg-muted animate-pulse" />
@@ -227,7 +269,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      {isGeneratingImages && <GeneratingAnimation slideCount={post.slideCount} />}
+      {(isGeneratingImages || regenerating) && <GeneratingAnimation slideCount={post.slideCount} />}
       <div className="space-y-4 md:space-y-6 max-w-5xl pb-8">
       {/* header */}
       <div className="flex items-center gap-3">
@@ -240,10 +282,24 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
         <div className="flex-1 min-w-0">
           <h1 className="text-base md:text-lg font-bold tracking-tight truncate">{post.title || post.brief}</h1>
         </div>
-        <div className="hidden sm:flex items-center gap-2 shrink-0">
-          <Badge variant="secondary" className="text-[10px]">{post.status}</Badge>
-          <Badge variant="outline" className="text-[10px]">{post.vibe}</Badge>
-          <Badge variant="outline" className="text-[10px]">{post.language}</Badge>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="hidden sm:flex items-center gap-2">
+            <Badge variant="secondary" className="text-[10px]">{post.status}</Badge>
+            <Badge variant="outline" className="text-[10px]">{post.vibe}</Badge>
+            <Badge variant="outline" className="text-[10px]">{post.language}</Badge>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs h-8 gap-1.5"
+            onClick={handleRegenerate}
+            disabled={regenerating || isGeneratingImages}
+          >
+            {regenerating
+              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> regenerating...</>
+              : <><RefreshCw className="h-3.5 w-3.5" /> regenerate</>
+            }
+          </Button>
         </div>
       </div>
 
