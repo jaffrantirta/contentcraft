@@ -72,8 +72,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
   const [loading, setLoading] = useState(true)
   const [regenerating, setRegenerating] = useState(false)
   const [activeSlide, setActiveSlide] = useState(0)
-  const [generatingSlides, setGeneratingSlides] = useState<Set<string>>(new Set())
-  const generationStarted = useRef(false)
+  const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -85,44 +84,26 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
     }).finally(() => setLoading(false))
   }, [id])
 
-  // trigger per-slide image generation when captions are ready
+  // poll for updated slide images while post is still generating
   useEffect(() => {
-    if (!post || generationStarted.current) return
-    const pendingSlides = post.slides.filter(s => !s.imageUrl && s.imagePrompt)
-    if (pendingSlides.length === 0) return
-    if (post.status !== "captions_done" && post.status !== "generating") return
+    if (!post) return
+    const isPending = post.status === "captions_done" || post.status === "generating"
+    const hasUnfinished = post.slides.some(s => !s.imageUrl)
+    if (!isPending && !hasUnfinished) return
 
-    generationStarted.current = true
-    setGeneratingSlides(new Set(pendingSlides.map(s => s.id)))
+    pollRef.current = setTimeout(async () => {
+      const fresh = await getPost(id)
+      if (fresh) setPost(fresh)
+    }, 4000)
 
-    pendingSlides.forEach(async (s) => {
-      try {
-        const res = await fetch(`/api/slides/${s.id}/image`, { method: "POST" })
-        if (res.ok) {
-          const { imageUrl } = await res.json()
-          setPost(prev => {
-            if (!prev) return prev
-            const updatedSlides = prev.slides.map(sl =>
-              sl.id === s.id ? { ...sl, imageUrl } : sl
-            )
-            const allDone = updatedSlides.every(sl => sl.imageUrl)
-            return { ...prev, slides: updatedSlides, status: allDone ? "done" : prev.status }
-          })
-        } else {
-          const err = await res.json().catch(() => ({}))
-          toast.error(`slide ${s.order + 1} image failed: ${err.detail || "unknown error"}`)
-        }
-      } catch {
-        toast.error(`slide ${s.order + 1} image generation failed`)
-      } finally {
-        setGeneratingSlides(prev => {
-          const next = new Set(prev)
-          next.delete(s.id)
-          return next
-        })
-      }
-    })
-  }, [post?.status, post?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+    return () => { if (pollRef.current) clearTimeout(pollRef.current) }
+  }, [post, id])
+
+  // derived: which slides are still pending
+  const generatingSlides = new Set(
+    (post?.slides ?? []).filter(s => !s.imageUrl).map(s => s.id)
+  )
+  const isGeneratingImages = post?.status !== "done" && generatingSlides.size > 0
 
   function copyCaption(caption: string | null, hashtags: string | null) {
     const text = [caption, hashtags].filter(Boolean).join("\n\n")
@@ -265,7 +246,6 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
     </div>
   )
 
-  const isGeneratingImages = generatingSlides.size > 0
   const currentSlide = post.slides?.[activeSlide]
   const currentSlideGenerating = currentSlide ? generatingSlides.has(currentSlide.id) : false
 

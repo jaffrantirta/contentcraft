@@ -1,14 +1,15 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest, NextResponse, after } from "next/server"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { post, slide, userSettings, identity } from "@/lib/db/schema"
 import { getTokenRouterClient, DEFAULT_CHAT_MODEL } from "@/lib/tokenrouter"
+import { generateSlideImage } from "@/lib/generate-slide-image"
 import { eq } from "drizzle-orm"
 import { v4 as uuidv4 } from "uuid"
 import { headers } from "next/headers"
 
-// captions only — image generation happens per-slide from the post page
-export const maxDuration = 45
+// captions (~30s) + background image generation via after()
+export const maxDuration = 300
 
 export async function POST(req: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -177,7 +178,6 @@ Respond ONLY with valid JSON, no markdown, no extra text.`
     })
   )
 
-  // captions done — images will be generated per-slide by the client
   await db.update(post).set({ status: "captions_done", title: brief.slice(0, 80) }).where(eq(post.id, postId))
 
   if (!settings || settings.plan === "free") {
@@ -187,6 +187,19 @@ Respond ONLY with valid JSON, no markdown, no extra text.`
       await db.insert(userSettings).values({ id: uuidv4(), userId, freeGenerationsUsed: 1 })
     }
   }
+
+  // fire image generation in background — response is sent first, window can be closed
+  after(async () => {
+    console.log(`[generate] background image generation started for post ${postId} (${slideRecords.length} slides)`)
+    await Promise.all(
+      slideRecords.map(s =>
+        generateSlideImage(s.id, userId).catch(err =>
+          console.error(`[generate] background image failed for slide ${s.id}:`, err)
+        )
+      )
+    )
+    console.log(`[generate] background image generation done for post ${postId}`)
+  })
 
   return NextResponse.json({ postId, slides: slideRecords })
 }
