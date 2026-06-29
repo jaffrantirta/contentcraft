@@ -79,9 +79,9 @@ export default function CreatePage() {
   }
 
   return (
-    <div className="max-w-2xl space-y-8">
+    <div className="max-w-2xl space-y-6 md:space-y-8 pb-24">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">create new post</h1>
+        <h1 className="text-xl md:text-2xl font-bold tracking-tight">create new post</h1>
         <p className="text-sm text-muted-foreground mt-1">fill in the details and let ai do the work</p>
       </div>
 
@@ -103,7 +103,7 @@ export default function CreatePage() {
       {/* aspect ratio */}
       <div className="space-y-3">
         <Label className="text-xs font-medium">post ratio</Label>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {ASPECT_RATIOS.map(r => (
             <button
               key={r.id}
@@ -122,58 +122,58 @@ export default function CreatePage() {
         </div>
       </div>
 
-      {/* language */}
-      <div className="space-y-3">
-        <Label className="text-xs font-medium">language</Label>
-        <div className="flex gap-2">
-          {(["id", "en"] as const).map(lang => (
-            <button
-              key={lang}
-              onClick={() => set("language", lang)}
-              className={cn(
-                "px-4 py-2 rounded-lg border text-xs transition-colors",
-                form.language === lang
-                  ? "border-primary bg-primary/5 font-medium"
-                  : "border-border/60 hover:border-border bg-card text-muted-foreground"
-              )}
-            >
-              {lang === "id" ? "🇮🇩 indonesian" : "🇺🇸 english"}
-            </button>
-          ))}
+      {/* language + slides in a row on mobile */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-3">
+          <Label className="text-xs font-medium">language</Label>
+          <div className="flex flex-col gap-2">
+            {(["id", "en"] as const).map(lang => (
+              <button
+                key={lang}
+                onClick={() => set("language", lang)}
+                className={cn(
+                  "px-3 py-2 rounded-lg border text-xs transition-colors text-left",
+                  form.language === lang
+                    ? "border-primary bg-primary/5 font-medium"
+                    : "border-border/60 hover:border-border bg-card text-muted-foreground"
+                )}
+              >
+                {lang === "id" ? "🇮🇩 indonesian" : "🇺🇸 english"}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* slide count */}
-      <div className="space-y-3">
-        <Label className="text-xs font-medium">
-          slides <span className="text-muted-foreground font-normal">(max 5 on free plan)</span>
-        </Label>
-        <div className="flex gap-2">
-          {[1, 2, 3, 4, 5].map(n => (
-            <button
-              key={n}
-              onClick={() => set("slideCount", n)}
-              className={cn(
-                "w-10 h-10 rounded-lg border text-xs font-medium transition-colors",
-                form.slideCount === n
-                  ? "border-primary bg-primary/5"
-                  : "border-border/60 hover:border-border bg-card text-muted-foreground"
-              )}
-            >
-              {n}
-            </button>
-          ))}
+        <div className="space-y-3">
+          <Label className="text-xs font-medium">slides</Label>
+          <div className="grid grid-cols-3 gap-1.5">
+            {[1, 2, 3, 4, 5].map(n => (
+              <button
+                key={n}
+                onClick={() => set("slideCount", n)}
+                className={cn(
+                  "h-9 rounded-lg border text-xs font-medium transition-colors",
+                  form.slideCount === n
+                    ? "border-primary bg-primary/5"
+                    : "border-border/60 hover:border-border bg-card text-muted-foreground"
+                )}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground">max 5 on free</p>
         </div>
       </div>
 
       {/* subject */}
       <div className="space-y-3">
         <Label className="text-xs font-medium">subject (person in design)</Label>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <button
             onClick={() => set("withSubject", false)}
             className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-lg border text-xs transition-colors",
+              "flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border text-xs transition-colors",
               !form.withSubject
                 ? "border-primary bg-primary/5 font-medium"
                 : "border-border/60 hover:border-border bg-card text-muted-foreground"
@@ -185,7 +185,7 @@ export default function CreatePage() {
           <button
             onClick={() => set("withSubject", true)}
             className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-lg border text-xs transition-colors",
+              "flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border text-xs transition-colors",
               form.withSubject
                 ? "border-primary bg-primary/5 font-medium"
                 : "border-border/60 hover:border-border bg-card text-muted-foreground"
@@ -202,7 +202,7 @@ export default function CreatePage() {
       {/* vibe */}
       <div className="space-y-3">
         <Label className="text-xs font-medium">vibe</Label>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {VIBES.map(v => (
             <button
               key={v.id}
@@ -225,7 +225,7 @@ export default function CreatePage() {
       {/* color palette */}
       <div className="space-y-3">
         <Label className="text-xs font-medium">color palette</Label>
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           {COLOR_PALETTES.map(p => (
             <button
               key={p.id}
@@ -248,33 +248,26 @@ export default function CreatePage() {
         </div>
       </div>
 
-      <Separator />
-
-      {/* generate */}
-      <div className="flex items-center justify-between pb-8">
-        <div>
-          <p className="text-xs text-muted-foreground">
-            {form.slideCount} slide{form.slideCount > 1 ? "s" : ""} · {form.language === "id" ? "indonesian" : "english"} · {form.vibe}
-          </p>
-        </div>
-        <Button
-          onClick={handleGenerate}
-          disabled={loading || !form.brief.trim()}
-          size="lg"
-          className="text-sm min-w-36"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              generating...
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-4 w-4 mr-2" />
-              generate
-            </>
-          )}
+      {/* generate — sticky on mobile, inline on desktop */}
+      <div className="hidden md:flex items-center justify-between pb-8">
+        <p className="text-xs text-muted-foreground">
+          {form.slideCount} slide{form.slideCount > 1 ? "s" : ""} · {form.language === "id" ? "indonesian" : "english"} · {form.vibe}
+        </p>
+        <Button onClick={handleGenerate} disabled={loading || !form.brief.trim()} size="lg" className="text-sm min-w-36">
+          {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />generating...</> : <><Sparkles className="h-4 w-4 mr-2" />generate</>}
         </Button>
+      </div>
+
+      {/* mobile sticky bottom bar */}
+      <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-background/95 backdrop-blur-sm border-t border-border/60 p-4">
+        <div className="flex items-center gap-3">
+          <p className="text-[10px] text-muted-foreground flex-1">
+            {form.slideCount} slides · {form.language} · {form.vibe}
+          </p>
+          <Button onClick={handleGenerate} disabled={loading || !form.brief.trim()} className="text-sm h-10 px-6">
+            {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />generating...</> : <><Sparkles className="h-4 w-4 mr-2" />generate</>}
+          </Button>
+        </div>
       </div>
     </div>
   )

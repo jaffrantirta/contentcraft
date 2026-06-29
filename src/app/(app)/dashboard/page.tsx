@@ -45,12 +45,12 @@ export default function DashboardPage() {
       {/* header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
+          <h1 className="text-xl md:text-2xl font-bold tracking-tight">
             hey, {session?.user?.name?.split(" ")[0] || "there"} 👋
           </h1>
           <p className="text-sm text-muted-foreground mt-1">ready to create something?</p>
         </div>
-        <Link href="/create">
+        <Link href="/create" className="shrink-0">
           <Button size="sm" className="text-xs h-9">
             <PlusCircle className="h-3.5 w-3.5 mr-2" />
             new post
@@ -59,8 +59,8 @@ export default function DashboardPage() {
       </div>
 
       {/* plan status */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-5 space-y-2">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
+        <Card className="p-4 md:p-5 space-y-2 col-span-2 md:col-span-1">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground">current plan</p>
             <Badge variant={planColor} className="text-[10px]">{settings?.plan || "free"}</Badge>

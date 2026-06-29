@@ -61,28 +61,28 @@ export default function LandingPage() {
       </nav>
 
       {/* hero */}
-      <section className="pt-32 pb-24 px-6">
-        <div className="max-w-3xl mx-auto text-center space-y-6">
+      <section className="pt-28 md:pt-32 pb-16 md:pb-24 px-6">
+        <div className="max-w-3xl mx-auto text-center space-y-5 md:space-y-6">
           <Badge variant="secondary" className="text-xs px-3 py-1">
             <Sparkles className="h-3 w-3 mr-1" />
             ai content generator
           </Badge>
-          <h1 className="text-5xl font-bold tracking-tight leading-tight">
+          <h1 className="text-4xl md:text-5xl font-bold tracking-tight leading-tight">
             create stunning<br />
             <span className="text-muted-foreground">social content</span><br />
             in seconds
           </h1>
-          <p className="text-muted-foreground text-lg max-w-xl mx-auto leading-relaxed">
+          <p className="text-muted-foreground text-base md:text-lg max-w-xl mx-auto leading-relaxed">
             write a brief. pick your vibe. get images + captions ready to post — for instagram, stories, linkedin, and more.
           </p>
-          <div className="flex items-center justify-center gap-3 pt-2">
-            <Link href="/login">
-              <Button size="lg" className="text-sm">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            <Link href="/login" className="w-full sm:w-auto">
+              <Button size="lg" className="text-sm w-full sm:w-auto">
                 try for free <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>
-            <Link href="#pricing">
-              <Button variant="outline" size="lg" className="text-sm">see pricing</Button>
+            <Link href="#pricing" className="w-full sm:w-auto">
+              <Button variant="outline" size="lg" className="text-sm w-full sm:w-auto">see pricing</Button>
             </Link>
           </div>
           <p className="text-xs text-muted-foreground">no credit card needed · 1 free generation</p>
@@ -101,13 +101,13 @@ export default function LandingPage() {
       </section>
 
       {/* features */}
-      <section className="py-24 px-6">
+      <section className="py-16 md:py-24 px-6">
         <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-16 space-y-3">
-            <h2 className="text-3xl font-bold tracking-tight">everything you need</h2>
+          <div className="text-center mb-10 md:mb-16 space-y-3">
+            <h2 className="text-2xl md:text-3xl font-bold tracking-tight">everything you need</h2>
             <p className="text-muted-foreground">to go from idea to ready-to-post content</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
             {features.map((f) => (
               <div key={f.title} className="p-6 rounded-xl border border-border/60 bg-card hover:border-border transition-colors">
                 <f.icon className="h-5 w-5 mb-4 text-muted-foreground" />
@@ -120,13 +120,13 @@ export default function LandingPage() {
       </section>
 
       {/* how it works */}
-      <section className="py-24 px-6 bg-muted/20">
+      <section className="py-16 md:py-24 px-6 bg-muted/20">
         <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-16 space-y-3">
-            <h2 className="text-3xl font-bold tracking-tight">how it works</h2>
+          <div className="text-center mb-10 md:mb-16 space-y-3">
+            <h2 className="text-2xl md:text-3xl font-bold tracking-tight">how it works</h2>
             <p className="text-muted-foreground">four steps to your finished content</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
             {[
               { step: "01", title: "write your brief", desc: "describe what your content is about" },
               { step: "02", title: "set the vibe", desc: "pick ratio, language, slides, colors, and mood" },
@@ -144,13 +144,13 @@ export default function LandingPage() {
       </section>
 
       {/* pricing */}
-      <section id="pricing" className="py-24 px-6">
+      <section id="pricing" className="py-16 md:py-24 px-6">
         <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-16 space-y-3">
-            <h2 className="text-3xl font-bold tracking-tight">simple pricing</h2>
+          <div className="text-center mb-10 md:mb-16 space-y-3">
+            <h2 className="text-2xl md:text-3xl font-bold tracking-tight">simple pricing</h2>
             <p className="text-muted-foreground">start free, scale when you need</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3 md:gap-6">
             {plans.map((plan) => (
               <div
                 key={plan.name}

@@ -78,19 +78,19 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
   const currentSlide = post.slides?.[activeSlide]
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="space-y-4 md:space-y-6 max-w-5xl pb-8">
       {/* header */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         <Link href="/posts">
-          <Button variant="ghost" size="sm" className="text-xs h-8 gap-1.5">
+          <Button variant="ghost" size="sm" className="text-xs h-8 gap-1.5 shrink-0">
             <ArrowLeft className="h-3.5 w-3.5" /> back
           </Button>
         </Link>
-        <Separator orientation="vertical" className="h-4" />
+        <Separator orientation="vertical" className="h-4 shrink-0" />
         <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-bold tracking-tight truncate">{post.title || post.brief}</h1>
+          <h1 className="text-base md:text-lg font-bold tracking-tight truncate">{post.title || post.brief}</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="hidden sm:flex items-center gap-2 shrink-0">
           <Badge variant="secondary" className="text-[10px]">{post.status}</Badge>
           <Badge variant="outline" className="text-[10px]">{post.vibe}</Badge>
           <Badge variant="outline" className="text-[10px]">{post.language}</Badge>
