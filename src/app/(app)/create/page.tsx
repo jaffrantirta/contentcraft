@@ -99,9 +99,9 @@ export default function CreatePage() {
           className="min-h-28 text-sm resize-none"
           value={form.brief}
           onChange={e => set("brief", e.target.value)}
-          maxLength={500}
+          maxLength={1500}
         />
-        <p className="text-[10px] text-muted-foreground text-right">{form.brief.length}/500</p>
+        <p className="text-[10px] text-muted-foreground text-right">{form.brief.length}/1500</p>
       </div>
 
       <Separator />
