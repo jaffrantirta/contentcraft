@@ -56,21 +56,60 @@ export async function POST(req: NextRequest) {
   })
 
   const lang = language === "en" ? "English" : "Indonesian"
-  const captionPrompt = `You are a social media content writer. Create ${count} slide captions for a social media post.
+
+  // detect if the brief already contains pre-written slide content
+  const hasPrewrittenSlides = /SLIDE\s*\d+/i.test(brief)
+
+  const styleKeywords: Record<string, string> = {
+    realistic:    "DSLR photo, sharp focus, natural lighting, photorealistic",
+    illustration: "editorial illustration, vector-style, clean linework",
+    "3d":         "3D render, octane render, subsurface scattering, depth of field",
+    flat:         "flat design, geometric shapes, bold colors, no shadows",
+    anime:        "anime style, cel shading, clean lineart, vibrant colors",
+    watercolor:   "watercolor painting, wet-on-wet technique, soft edges, paper texture",
+    abstract:     "abstract art, expressionist brushstrokes, textured layers",
+    minimal:      "minimalist design, negative space, single accent color, clean typography",
+  }
+  const styleHint = styleKeywords[designStyle || "realistic"] || styleKeywords.realistic
+  const brandNote = identityData?.companyName
+    ? ` Brand context: ${identityData.companyName}${identityData.tagline ? ` — ${identityData.tagline}` : ""}.`
+    : ""
+  const logoNote = identityData?.companyName && identityData?.logoPosition && identityData.logoPosition !== "none"
+    ? ` Reserve a clean uncluttered zone at the ${identityData.logoPosition.replace("-", " ")} for a brand logo overlay.${identityData.footerText ? ` Also reserve footer space for: "${identityData.footerText}".` : ""}`
+    : ""
+
+  const captionPrompt = hasPrewrittenSlides
+    ? `You are a social media content designer. The user has already written the exact text for each slide. Your job is to extract each slide's text and create image prompts.
+
+Brief (contains pre-written slides):
+${brief}
+
+Language: ${lang}
+Vibe: ${vibe}
+Design style: ${designStyle || "realistic"}
+Color palette: ${colorPalette?.join(", ") || "vibrant"}
+${withSubject ? "Include a person/subject in the design." : "No people — focus on objects, graphic elements, and text layout."}${brandNote}
+
+Return a JSON object with a "slides" key — an array of exactly ${count} objects. Rules:
+- "caption": copy the EXACT text from that slide in the brief. Do NOT rewrite or summarize it. Preserve emojis, bullet points, line breaks.
+- "hashtags": 5 relevant hashtags as a string
+- "imagePrompt": a social media graphic design prompt. Describe it as a DESIGNED SLIDE (not a plain photo): styled background, typography layout area, graphic elements that match the slide content. Style: ${styleHint}.${logoNote} The image must look like a finished social media carousel slide — include visual layout space for the slide text to be readable on top.
+
+Respond ONLY with valid JSON, no markdown, no extra text.`
+    : `You are a social media content writer. Create ${count} slide captions for a social media post.
 
 Brief: ${brief}
 Language: ${lang}
 Vibe: ${vibe}
 Slide count: ${count}
+Design style: ${designStyle || "realistic"}
+Color palette: ${colorPalette?.join(", ") || "vibrant"}
+${withSubject ? "Include a person/subject in each image." : "No people — focus on objects, graphic elements, and abstract visuals."}${brandNote}
 
-Return a JSON object with a "slides" key containing an array of exactly ${count} objects. Each object must have:
-- "caption": engaging caption text (2-4 sentences)
+Return a JSON object with a "slides" key — an array of exactly ${count} objects, each with:
+- "caption": engaging caption text (2-4 sentences) in ${lang}
 - "hashtags": 5 relevant hashtags as a string
-- "imagePrompt": a detailed image generation prompt for this slide
-
-Style: ${vibe}. Design style: ${designStyle || "realistic"}. Color palette: ${colorPalette?.join(", ") || "vibrant"}.${withSubject ? " Include a person/subject in the design." : " No person in the design, focus on objects, text, and abstract visuals."}${identityData?.companyName ? ` Brand: ${identityData.companyName}${identityData.tagline ? ` — ${identityData.tagline}` : ""}.` : ""}
-
-For the imagePrompt field of each slide: create a detailed visual prompt that clearly specifies the "${designStyle || "realistic"}" art style — use style-specific language (e.g. for 3d: "octane render, subsurface scattering"; for watercolor: "wet-on-wet technique, paper texture"; for anime: "cel shading, clean lineart"; for realistic: "DSLR photo, sharp focus, natural lighting"; for illustration: "editorial illustration, vector-style"; for flat: "flat design, geometric shapes, no shadows"; for abstract: "abstract expressionism, textured brushstrokes"; for minimal: "minimalist, negative space, single accent color").${identityData?.companyName && identityData?.logoPosition && identityData.logoPosition !== "none" ? ` Reserve a clear area at the ${identityData.logoPosition.replace("-", " ")} of the image for a brand logo. Leave that zone clean and uncluttered so a logo can be overlaid.${identityData.footerText ? ` Also reserve the footer area for text: "${identityData.footerText}".` : ""}` : ""}
+- "imagePrompt": a social media graphic design prompt — describe a DESIGNED SLIDE with styled background, graphic elements, and layout space for text overlay. Style: ${styleHint}.${logoNote}
 
 Respond ONLY with valid JSON, no markdown, no extra text.`
 
