@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { post, slide, userSettings } from "@/lib/db/schema"
-import { getTokenRouterClient, DEFAULT_IMAGE_MODEL, DEFAULT_CHAT_MODEL } from "@/lib/tokenrouter"
+import { getTokenRouterClient, DEFAULT_CHAT_MODEL } from "@/lib/tokenrouter"
 import { eq } from "drizzle-orm"
 import { v4 as uuidv4 } from "uuid"
 import { headers } from "next/headers"
 
-export const maxDuration = 60
+// captions only — image generation happens per-slide from the post page
+export const maxDuration = 45
 
 export async function POST(req: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -16,30 +17,24 @@ export async function POST(req: NextRequest) {
   const userId = session.user.id
   const settings = await db.query.userSettings.findFirst({ where: eq(userSettings.userId, userId) })
 
-  // free tier check
   if (!settings || settings.plan === "free") {
     const used = settings?.freeGenerationsUsed ?? 0
-    if (used >= 1) {
-      return NextResponse.json({ error: "free_limit_reached" }, { status: 403 })
-    }
+    if (used >= 1) return NextResponse.json({ error: "free_limit_reached" }, { status: 403 })
   }
 
   const body = await req.json()
   const { brief, aspectRatio, language, slideCount, withSubject, vibe, colorPalette } = body
-
   if (!brief) return NextResponse.json({ error: "brief is required" }, { status: 400 })
+
   const count = Math.min(Math.max(1, Number(slideCount) || 3), settings?.plan === "free" ? 5 : 10)
 
-  // determine api config
   const isByok = settings?.plan === "byok" && settings.byokApiKey
-  const clientConfig = isByok
-    ? { apiKey: settings.byokApiKey!, baseURL: settings.byokBaseUrl || undefined, model: settings.byokModel || undefined }
+  const client = getTokenRouterClient(isByok
+    ? { apiKey: settings.byokApiKey!, baseURL: settings.byokBaseUrl || undefined }
     : {}
-  const client = getTokenRouterClient(clientConfig)
-  const imageModel = (isByok && settings?.byokModel) ? settings.byokModel : DEFAULT_IMAGE_MODEL
+  )
   const chatModel = (isByok && settings?.byokChatModel) ? settings.byokChatModel : DEFAULT_CHAT_MODEL
 
-  // create post record
   const postId = uuidv4()
   await db.insert(post).values({
     id: postId,
@@ -54,7 +49,6 @@ export async function POST(req: NextRequest) {
     status: "generating",
   })
 
-  // generate captions first
   const lang = language === "en" ? "English" : "Indonesian"
   const captionPrompt = `You are a social media content writer. Create ${count} slide captions for a social media post.
 
@@ -68,19 +62,19 @@ Return a JSON object with a "slides" key containing an array of exactly ${count}
 - "hashtags": 5 relevant hashtags as a string
 - "imagePrompt": a detailed image generation prompt for this slide
 
-The image prompts should be vivid and visual. Style: ${vibe}. Color palette: ${colorPalette?.join(", ") || "vibrant"}.${withSubject ? " Include a person/subject in the design." : " No person in the design, focus on objects, text, and abstract visuals."}
+Style: ${vibe}. Color palette: ${colorPalette?.join(", ") || "vibrant"}.${withSubject ? " Include a person/subject in the design." : " No person in the design, focus on objects, text, and abstract visuals."}
 
 Respond ONLY with valid JSON, no markdown, no extra text.`
 
-  let slidesData: Array<{ caption: string; hashtags: string; imagePrompt: string }> = []
-
   function cleanRaw(s: string): string {
     return s
-      .replace(/<think>[\s\S]*?<\/think>/gi, "") // strip <think>...</think> reasoning blocks
-      .replace(/^```(?:json)?\n?/im, "")         // strip opening code fence
-      .replace(/\n?```$/im, "")                  // strip closing code fence
+      .replace(/<think>[\s\S]*?<\/think>/gi, "")
+      .replace(/^```(?:json)?\n?/im, "")
+      .replace(/\n?```$/im, "")
       .trim()
   }
+
+  let slidesData: Array<{ caption: string; hashtags: string; imagePrompt: string }> = []
 
   try {
     let raw = "{}"
@@ -92,7 +86,6 @@ Respond ONLY with valid JSON, no markdown, no extra text.`
       })
       raw = cleanRaw(chatRes.choices[0]?.message?.content || "{}")
     } catch {
-      // model doesn't support response_format — retry as plain text
       const chatRes = await client.chat.completions.create({
         model: chatModel,
         messages: [{ role: "user", content: captionPrompt }],
@@ -115,49 +108,26 @@ Respond ONLY with valid JSON, no markdown, no extra text.`
     return NextResponse.json({ error: "no slides data returned" }, { status: 500 })
   }
 
-  // generate images in parallel (max 5 concurrently)
+  // insert slides with captions + prompts — imageUrl generated separately per slide
   const slideRecords = await Promise.all(
     slidesData.slice(0, count).map(async (s, i) => {
       const slideId = uuidv4()
-      let imageUrl: string | null = null
-
-      try {
-        const imgRes = await client.images.generate({
-          model: imageModel,
-          prompt: s.imagePrompt,
-          size: "1024x1024",
-          n: 1,
-        })
-        const imgData = imgRes.data?.[0]
-        // support both url and base64 responses
-        if (imgData?.url) {
-          imageUrl = imgData.url
-        } else if (imgData?.b64_json) {
-          imageUrl = `data:image/png;base64,${imgData.b64_json}`
-        }
-      } catch (err) {
-        console.error(`image gen failed for slide ${i}:`, err instanceof Error ? err.message : err)
-        imageUrl = null
-      }
-
       await db.insert(slide).values({
         id: slideId,
         postId,
         order: i,
-        imageUrl,
+        imageUrl: null,
         imagePrompt: s.imagePrompt,
         caption: s.caption,
         hashtags: s.hashtags,
       })
-
-      return { id: slideId, order: i, imageUrl, caption: s.caption, hashtags: s.hashtags }
+      return { id: slideId, order: i, imagePrompt: s.imagePrompt, caption: s.caption, hashtags: s.hashtags }
     })
   )
 
-  // update post status
-  await db.update(post).set({ status: "done", title: brief.slice(0, 80) }).where(eq(post.id, postId))
+  // captions done — images will be generated per-slide by the client
+  await db.update(post).set({ status: "captions_done", title: brief.slice(0, 80) }).where(eq(post.id, postId))
 
-  // increment free usage
   if (!settings || settings.plan === "free") {
     if (settings) {
       await db.update(userSettings).set({ freeGenerationsUsed: (settings.freeGenerationsUsed || 0) + 1 }).where(eq(userSettings.userId, userId))

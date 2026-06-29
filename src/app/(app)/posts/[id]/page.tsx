@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useEffect, useState } from "react"
+import { use, useEffect, useRef, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import { ArrowLeft, Copy, Download, ImageOff } from "lucide-react"
 import Link from "next/link"
+import { GeneratingAnimation } from "@/components/app/generating-animation"
 
 interface Slide {
   id: string
@@ -43,12 +44,53 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
   const [post, setPost] = useState<Post | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeSlide, setActiveSlide] = useState(0)
+  const [generatingSlides, setGeneratingSlides] = useState<Set<string>>(new Set())
+  const generationStarted = useRef(false)
 
   useEffect(() => {
     getPost(id).then(data => {
       setPost(data)
     }).finally(() => setLoading(false))
   }, [id])
+
+  // trigger per-slide image generation when captions are ready
+  useEffect(() => {
+    if (!post || generationStarted.current) return
+    const pendingSlides = post.slides.filter(s => !s.imageUrl && s.imagePrompt)
+    if (pendingSlides.length === 0) return
+    if (post.status !== "captions_done" && post.status !== "generating") return
+
+    generationStarted.current = true
+    setGeneratingSlides(new Set(pendingSlides.map(s => s.id)))
+
+    pendingSlides.forEach(async (s) => {
+      try {
+        const res = await fetch(`/api/slides/${s.id}/image`, { method: "POST" })
+        if (res.ok) {
+          const { imageUrl } = await res.json()
+          setPost(prev => {
+            if (!prev) return prev
+            const updatedSlides = prev.slides.map(sl =>
+              sl.id === s.id ? { ...sl, imageUrl } : sl
+            )
+            const allDone = updatedSlides.every(sl => sl.imageUrl)
+            return { ...prev, slides: updatedSlides, status: allDone ? "done" : prev.status }
+          })
+        } else {
+          const err = await res.json().catch(() => ({}))
+          toast.error(`slide ${s.order + 1} image failed: ${err.detail || "unknown error"}`)
+        }
+      } catch {
+        toast.error(`slide ${s.order + 1} image generation failed`)
+      } finally {
+        setGeneratingSlides(prev => {
+          const next = new Set(prev)
+          next.delete(s.id)
+          return next
+        })
+      }
+    })
+  }, [post?.status, post?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function copyCaption(caption: string | null, hashtags: string | null) {
     const text = [caption, hashtags].filter(Boolean).join("\n\n")
@@ -75,10 +117,14 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
     </div>
   )
 
+  const isGeneratingImages = generatingSlides.size > 0
   const currentSlide = post.slides?.[activeSlide]
+  const currentSlideGenerating = currentSlide ? generatingSlides.has(currentSlide.id) : false
 
   return (
-    <div className="space-y-4 md:space-y-6 max-w-5xl pb-8">
+    <>
+      {isGeneratingImages && <GeneratingAnimation slideCount={post.slideCount} />}
+      <div className="space-y-4 md:space-y-6 max-w-5xl pb-8">
       {/* header */}
       <div className="flex items-center gap-3">
         <Link href="/posts">
@@ -101,7 +147,14 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
         {/* image area */}
         <div className="space-y-4">
           <div className="aspect-square rounded-xl overflow-hidden bg-muted flex items-center justify-center border border-border/60">
-            {currentSlide?.imageUrl ? (
+            {currentSlideGenerating ? (
+              <div className="w-full h-full bg-muted animate-pulse flex items-center justify-center">
+                <div className="text-center space-y-2">
+                  <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto" />
+                  <p className="text-xs text-muted-foreground">generating image...</p>
+                </div>
+              </div>
+            ) : currentSlide?.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={currentSlide.imageUrl}
@@ -127,7 +180,11 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                     activeSlide === i ? "border-primary" : "border-border/40 hover:border-border"
                   }`}
                 >
-                  {s.imageUrl ? (
+                  {generatingSlides.has(s.id) ? (
+                    <div className="w-full h-full bg-muted animate-pulse flex items-center justify-center">
+                      <div className="w-4 h-4 rounded-full border border-primary border-t-transparent animate-spin" />
+                    </div>
+                  ) : s.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={s.imageUrl} alt="" className="w-full h-full object-cover" />
                   ) : (
@@ -141,7 +198,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
           )}
 
           {/* download */}
-          {currentSlide?.imageUrl && (
+          {currentSlide?.imageUrl && !currentSlideGenerating && (
             <a href={currentSlide.imageUrl} download={`slide-${activeSlide + 1}.png`} target="_blank" rel="noopener noreferrer">
               <Button variant="outline" size="sm" className="text-xs h-8 w-full gap-2">
                 <Download className="h-3.5 w-3.5" />
@@ -156,6 +213,11 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
           <div className="space-y-1">
             <p className="text-xs font-medium text-muted-foreground">
               slide {activeSlide + 1} of {post.slides.length}
+              {isGeneratingImages && (
+                <span className="ml-2 text-primary">
+                  · {generatingSlides.size} image{generatingSlides.size !== 1 ? "s" : ""} generating
+                </span>
+              )}
             </p>
             <h2 className="text-sm font-semibold">caption</h2>
           </div>
@@ -196,7 +258,10 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                 {post.slides.map((s, i) => (
                   <div key={s.id} className="p-3 rounded-lg bg-muted/40 space-y-1">
                     <div className="flex items-center justify-between">
-                      <p className="text-[10px] text-muted-foreground font-medium">slide {i + 1}</p>
+                      <p className="text-[10px] text-muted-foreground font-medium">
+                        slide {i + 1}
+                        {generatingSlides.has(s.id) && <span className="ml-1 text-primary">· generating...</span>}
+                      </p>
                       <Button
                         variant="ghost"
                         size="icon"
@@ -215,5 +280,6 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
         </div>
       </div>
     </div>
+    </>
   )
 }
