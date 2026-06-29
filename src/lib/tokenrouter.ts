@@ -13,8 +13,8 @@ export function getTokenRouterClient(config?: TokenRouterConfig) {
   })
 }
 
-export const DEFAULT_IMAGE_MODEL = "dall-e-3"
-export const DEFAULT_CHAT_MODEL = "gpt-4o-mini"
+export const DEFAULT_IMAGE_MODEL = process.env.TOKENROUTER_IMAGE_MODEL || "dall-e-3"
+export const DEFAULT_CHAT_MODEL = process.env.TOKENROUTER_CHAT_MODEL || "gpt-4o-mini"
 
 export const VIBES = [
   { id: "fun", label: "fun", emoji: "🎉", description: "playful, energetic, colorful" },

@@ -75,18 +75,30 @@ Respond ONLY with valid JSON, no markdown, no extra text.`
   let slidesData: Array<{ caption: string; hashtags: string; imagePrompt: string }> = []
 
   try {
-    const chatRes = await client.chat.completions.create({
-      model: chatModel,
-      messages: [{ role: "user", content: captionPrompt }],
-      response_format: { type: "json_object" },
-    })
+    // try with json_object first, fall back to plain text if model doesn't support it
+    let raw = "{}"
+    try {
+      const chatRes = await client.chat.completions.create({
+        model: chatModel,
+        messages: [{ role: "user", content: captionPrompt }],
+        response_format: { type: "json_object" },
+      })
+      raw = chatRes.choices[0]?.message?.content || "{}"
+    } catch {
+      // model may not support response_format, retry without it
+      const chatRes = await client.chat.completions.create({
+        model: chatModel,
+        messages: [{ role: "user", content: captionPrompt }],
+      })
+      raw = chatRes.choices[0]?.message?.content || "{}"
+      // strip markdown code fences if present
+      raw = raw.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim()
+    }
 
-    const raw = chatRes.choices[0]?.message?.content || "{}"
     const parsed = JSON.parse(raw)
-    // handle various shapes the model might return
     slidesData = Array.isArray(parsed)
       ? parsed
-      : parsed.slides || parsed.data || parsed.captions || Object.values(parsed)[0] || []
+      : parsed.slides || parsed.data || parsed.captions || (Object.values(parsed)[0] as typeof slidesData) || []
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     await db.update(post).set({ status: "error", errorMessage: `caption failed: ${msg}` }).where(eq(post.id, postId))
