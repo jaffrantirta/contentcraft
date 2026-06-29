@@ -125,23 +125,8 @@ ${imagePromptRule}
 Respond ONLY with valid JSON, no markdown, no extra text.`
 
   } else if (hasPerSlideBriefs) {
-    captionPrompt = `You are a social media content writer. Create a ${count}-slide carousel. Each slide has its own specific content — treat each slide's brief as the EXACT topic for that slide.
-
-SLIDE BRIEFS (each slide must be about its own topic — do NOT repeat the same message):
-${perSlideLines.join("\n")}
-
-General context / brand: ${brief}
-Language: ${lang}
-Vibe: ${vibe}
-
-Return a JSON object with a "slides" key — array of exactly ${count} objects in the same order as the slide briefs:
-- "caption": caption in ${lang} for THIS slide's specific topic (2-4 sentences). Must be unique and different from other slides.
-- "hashtags": 5 relevant hashtags
-- "imagePrompt": visual scene that matches THIS slide's specific topic
-
-${imagePromptRule}
-
-Respond ONLY with valid JSON, no markdown, no extra text.`
+    // parallel path — captionPrompt unused, handled below
+    captionPrompt = ""
 
   } else {
     captionPrompt = `You are a social media content writer. Create ${count} slide captions for a carousel post.
@@ -173,31 +158,65 @@ Respond ONLY with valid JSON, no markdown, no extra text.`
 
   let slidesData: Array<{ caption: string; hashtags: string; imagePrompt: string }> = []
 
-  try {
-    let raw = "{}"
-    console.log(`[generate] calling chat model: ${chatModel}`)
+  async function callChat(prompt: string): Promise<string> {
     try {
-      const chatRes = await client.chat.completions.create({
+      const res = await client.chat.completions.create({
         model: chatModel,
-        messages: [{ role: "user", content: captionPrompt }],
+        messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
       })
-      raw = cleanRaw(chatRes.choices[0]?.message?.content || "{}")
-    } catch (firstErr) {
-      console.error("[generate] chat with response_format failed, retrying without:", firstErr)
-      const chatRes = await client.chat.completions.create({
+      return cleanRaw(res.choices[0]?.message?.content || "{}")
+    } catch {
+      const res = await client.chat.completions.create({
         model: chatModel,
-        messages: [{ role: "user", content: captionPrompt }],
+        messages: [{ role: "user", content: prompt }],
       })
-      raw = cleanRaw(chatRes.choices[0]?.message?.content || "{}")
+      return cleanRaw(res.choices[0]?.message?.content || "{}")
     }
+  }
 
-    console.log("[generate] raw response length:", raw.length, "| preview:", raw.slice(0, 120))
-    const parsed = JSON.parse(raw)
-    slidesData = Array.isArray(parsed)
-      ? parsed
-      : parsed.slides || parsed.data || parsed.captions || (Object.values(parsed)[0] as typeof slidesData) || []
-    console.log("[generate] parsed slides:", slidesData.length)
+  try {
+    if (hasPerSlideBriefs) {
+      // one AI call per slide in parallel — each only sees its own brief, no chance to repeat
+      console.log(`[generate] parallel per-slide generation: ${count} slides`)
+      slidesData = await Promise.all(
+        slideBriefs.slice(0, count).map(async (slideBrief: string, i: number) => {
+          const slidePrompt = `You are a social media content writer. Write content for slide ${i + 1} of a carousel post.
+
+This slide's topic: ${slideBrief?.trim() || brief}
+General context: ${brief}
+Language: ${lang}
+Vibe: ${vibe}
+
+Return a JSON object with exactly:
+- "caption": caption in ${lang} for this slide's specific topic (2-4 sentences)
+- "hashtags": 5 relevant hashtags as a string
+- "imagePrompt": visual scene for this slide's topic
+
+${imagePromptRule}
+
+Respond ONLY with valid JSON.`
+          const raw = await callChat(slidePrompt)
+          const parsed = JSON.parse(raw)
+          return {
+            caption: parsed.caption || "",
+            hashtags: parsed.hashtags || "",
+            imagePrompt: parsed.imagePrompt || "",
+          }
+        })
+      )
+      console.log(`[generate] parallel generation done: ${slidesData.length} slides`)
+    } else {
+      let raw = "{}"
+      console.log(`[generate] calling chat model: ${chatModel}`)
+      raw = await callChat(captionPrompt)
+      console.log("[generate] raw response length:", raw.length, "| preview:", raw.slice(0, 120))
+      const parsed = JSON.parse(raw)
+      slidesData = Array.isArray(parsed)
+        ? parsed
+        : parsed.slides || parsed.data || parsed.captions || (Object.values(parsed)[0] as typeof slidesData) || []
+      console.log("[generate] parsed slides:", slidesData.length)
+    }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error("[generate] caption generation failed:", msg)
