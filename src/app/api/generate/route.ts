@@ -123,7 +123,13 @@ Respond ONLY with valid JSON, no markdown, no extra text.`
           size: "1024x1024",
           n: 1,
         })
-        imageUrl = imgRes.data?.[0]?.url || null
+        const imgData = imgRes.data?.[0]
+        // support both url and base64 responses
+        if (imgData?.url) {
+          imageUrl = imgData.url
+        } else if (imgData?.b64_json) {
+          imageUrl = `data:image/png;base64,${imgData.b64_json}`
+        }
       } catch (err) {
         console.error(`image gen failed for slide ${i}:`, err instanceof Error ? err.message : err)
         imageUrl = null
