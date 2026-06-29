@@ -29,6 +29,8 @@ interface Post {
   vibe: string
   designStyle: string
   captionMode: string
+  slideBriefs: string[]
+  showFooter: boolean
   language: string
   aspectRatio: string
   slideCount: number
@@ -192,12 +194,15 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           brief: post.brief,
+          slideBriefs: post.slideBriefs,
           aspectRatio: post.aspectRatio,
           language: post.language,
           slideCount: post.slideCount,
           withSubject: post.withSubject,
           vibe: post.vibe,
           designStyle: post.designStyle,
+          captionMode: post.captionMode,
+          showFooter: post.showFooter,
           colorPalette: post.colorPalette,
         }),
       })

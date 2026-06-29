@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { brief, aspectRatio, language, slideCount, withSubject, vibe, designStyle, colorPalette, captionMode } = body
+  const { brief, slideBriefs, aspectRatio, language, slideCount, withSubject, vibe, designStyle, colorPalette, captionMode, showFooter } = body
   if (!brief) return NextResponse.json({ error: "brief is required" }, { status: 400 })
 
   const count = Math.min(Math.max(1, Number(slideCount) || 3), settings?.plan === "free" ? 5 : 10)
@@ -53,6 +53,8 @@ export async function POST(req: NextRequest) {
     vibe: vibe || "professional",
     designStyle: designStyle || "realistic",
     captionMode: captionMode || "per_slide",
+    slideBriefs: Array.isArray(slideBriefs) ? slideBriefs : [],
+    showFooter: showFooter !== false,
     colorPalette: colorPalette || [],
     status: "generating",
   })
@@ -60,6 +62,9 @@ export async function POST(req: NextRequest) {
   const lang = language === "en" ? "English" : "Indonesian"
   const isSingleCaption = (captionMode || "per_slide") === "single"
   const hasPrewrittenSlides = /SLIDE\s*\d+/i.test(brief)
+  const perSlideSection = Array.isArray(slideBriefs) && slideBriefs.some((s: string) => s?.trim())
+    ? `\n\nPer-slide content:\n${slideBriefs.slice(0, count).map((b: string, i: number) => `Slide ${i + 1}: ${b?.trim() || "(no specific brief)"}`).join("\n")}`
+    : ""
 
   const styleKeywords: Record<string, string> = {
     realistic:    "photorealistic DSLR photo, sharp focus, natural lighting",
@@ -82,17 +87,17 @@ export async function POST(req: NextRequest) {
   let captionPrompt: string
 
   if (isSingleCaption) {
-    captionPrompt = `You are a social media content writer. Write ONE caption for a social media post, then create ${count} different background image prompts (one per slide).
+    captionPrompt = `You are a social media content writer. Write ONE caption for a social media post, then create ${count} different image prompts (one per slide).
 
-Brief: ${brief}
+General brief: ${brief}${perSlideSection}
 Language: ${lang}
 Vibe: ${vibe}
 Slide count: ${count}
 
-Return a JSON object with a "slides" key — an array of exactly ${count} objects. ALL slides share the same caption and hashtags, but each has a unique imagePrompt.
+Return a JSON object with a "slides" key — an array of exactly ${count} objects. ALL slides share the same caption and hashtags, but each has a unique imagePrompt based on its per-slide content.
 - "caption": the SAME engaging caption for every slide (3-5 sentences) in ${lang}
 - "hashtags": the SAME 5 hashtags string for every slide
-- "imagePrompt": unique visual scene for this slide (different composition per slide)
+- "imagePrompt": unique visual scene for this slide based on its per-slide content
 
 ${imagePromptRule}
 
@@ -109,7 +114,7 @@ Vibe: ${vibe}
 Return a JSON object with a "slides" key — an array of exactly ${count} objects:
 - "caption": copy the EXACT text from that slide. Preserve emojis, bullets, line breaks. Do NOT rewrite.
 - "hashtags": 5 relevant hashtags as a string
-- "imagePrompt": visual background for this slide
+- "imagePrompt": visual scene for this slide
 
 ${imagePromptRule}
 
@@ -117,15 +122,17 @@ Respond ONLY with valid JSON, no markdown, no extra text.`
   } else {
     captionPrompt = `You are a social media content writer. Create ${count} slide captions for a carousel post.
 
-Brief: ${brief}
+General brief: ${brief}${perSlideSection}
 Language: ${lang}
 Vibe: ${vibe}
 Slide count: ${count}
 
+Each slide's caption and image must be based on its specific per-slide content. Make each slide distinct and focused on its own topic.
+
 Return a JSON object with a "slides" key — an array of exactly ${count} objects:
-- "caption": engaging caption for this slide (2-4 sentences) in ${lang}
+- "caption": caption for this slide in ${lang}, based on that slide's specific content (2-4 sentences)
 - "hashtags": 5 relevant hashtags as a string
-- "imagePrompt": visual background for this slide
+- "imagePrompt": visual scene for this slide matching its specific content
 
 ${imagePromptRule}
 

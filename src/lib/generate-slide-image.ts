@@ -40,8 +40,8 @@ Typography: render the following caption as bold, legible text integrated into t
 
 "${slideRow.caption}"`
 
-  // footer: burn consistent footer text on every slide
-  if (identityRow?.footerText) {
+  // footer: burn consistent footer text on every slide (only if post has showFooter = true)
+  if (identityRow?.footerText && slideRow.post.showFooter !== false) {
     fullPrompt += `
 
 Footer: add a thin footer bar at the very bottom of the image. Inside it, render this text in small, clean typography: "${identityRow.footerText}". Keep it subtle but readable — use a semi-transparent dark or brand-colored strip. This footer must appear on every slide consistently.`

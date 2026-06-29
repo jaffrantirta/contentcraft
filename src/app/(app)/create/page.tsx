@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import { VIBES, COLOR_PALETTES, ASPECT_RATIOS, DESIGN_STYLES } from "@/lib/tokenrouter"
@@ -20,11 +19,13 @@ type StyleId = typeof DESIGN_STYLES[number]["id"]
 
 interface FormState {
   brief: string
+  slideBriefs: string[]
   aspectRatio: AspectRatioId
   language: "id" | "en"
   slideCount: number
   withSubject: boolean
   captionMode: "per_slide" | "single"
+  showFooter: boolean
   vibe: VibeId
   designStyle: StyleId
   colorPalette: PaletteId
@@ -35,11 +36,13 @@ export default function CreatePage() {
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState<FormState>({
     brief: "",
+    slideBriefs: ["", "", ""],
     aspectRatio: "1:1",
     language: "id",
     slideCount: 3,
     withSubject: false,
     captionMode: "per_slide",
+    showFooter: true,
     vibe: "professional",
     designStyle: "realistic",
     colorPalette: "ocean",
@@ -49,9 +52,25 @@ export default function CreatePage() {
     setForm(prev => ({ ...prev, [key]: value }))
   }
 
+  function setSlideCount(n: number) {
+    setForm(prev => {
+      const current = prev.slideBriefs
+      const next = Array.from({ length: n }, (_, i) => current[i] ?? "")
+      return { ...prev, slideCount: n, slideBriefs: next }
+    })
+  }
+
+  function setSlideBrief(index: number, value: string) {
+    setForm(prev => {
+      const next = [...prev.slideBriefs]
+      next[index] = value
+      return { ...prev, slideBriefs: next }
+    })
+  }
+
   async function handleGenerate() {
     if (!form.brief.trim()) {
-      toast.error("please write a brief first")
+      toast.error("please write a general brief first")
       return
     }
     setLoading(true)
@@ -93,12 +112,13 @@ export default function CreatePage() {
         <p className="text-sm text-muted-foreground mt-1">fill in the details and let ai do the work</p>
       </div>
 
-      {/* brief */}
+      {/* general brief */}
       <div className="space-y-2">
-        <Label className="text-xs font-medium">brief *</Label>
+        <Label className="text-xs font-medium">general brief *</Label>
+        <p className="text-[10px] text-muted-foreground">overall topic, brand, and design direction</p>
         <Textarea
           placeholder="what is this content about? describe your message, product, or topic..."
-          className="min-h-28 text-sm resize-none"
+          className="min-h-24 text-sm resize-none"
           value={form.brief}
           onChange={e => set("brief", e.target.value)}
           maxLength={1500}
@@ -130,7 +150,7 @@ export default function CreatePage() {
         </div>
       </div>
 
-      {/* language + slides in a row on mobile */}
+      {/* language + slides */}
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-3">
           <Label className="text-xs font-medium">language</Label>
@@ -158,7 +178,7 @@ export default function CreatePage() {
             {[1, 2, 3, 4, 5].map(n => (
               <button
                 key={n}
-                onClick={() => set("slideCount", n)}
+                onClick={() => setSlideCount(n)}
                 className={cn(
                   "h-9 rounded-lg border text-xs font-medium transition-colors",
                   form.slideCount === n
@@ -171,6 +191,28 @@ export default function CreatePage() {
             ))}
           </div>
           <p className="text-[10px] text-muted-foreground">max 5 on free</p>
+        </div>
+      </div>
+
+      {/* per-slide briefs */}
+      <div className="space-y-3">
+        <div>
+          <Label className="text-xs font-medium">slide content</Label>
+          <p className="text-[10px] text-muted-foreground mt-0.5">describe what each slide should say or show</p>
+        </div>
+        <div className="space-y-3">
+          {form.slideBriefs.map((brief, i) => (
+            <div key={i} className="space-y-1.5">
+              <p className="text-[10px] font-medium text-muted-foreground">slide {i + 1}</p>
+              <Textarea
+                placeholder={`what should slide ${i + 1} be about?`}
+                className="min-h-16 text-sm resize-none"
+                value={brief}
+                onChange={e => setSlideBrief(i, e.target.value)}
+                maxLength={500}
+              />
+            </div>
+          ))}
         </div>
       </div>
 
@@ -307,6 +349,37 @@ export default function CreatePage() {
               <p className="text-[10px] text-left font-medium">{p.name}</p>
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* footer toggle */}
+      <div className="space-y-3">
+        <Label className="text-xs font-medium">footer</Label>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => set("showFooter", true)}
+            className={cn(
+              "p-3 rounded-lg border text-left transition-colors",
+              form.showFooter
+                ? "border-primary bg-primary/5"
+                : "border-border/60 hover:border-border bg-card"
+            )}
+          >
+            <p className="text-xs font-medium">show footer</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">footer text on every slide</p>
+          </button>
+          <button
+            onClick={() => set("showFooter", false)}
+            className={cn(
+              "p-3 rounded-lg border text-left transition-colors",
+              !form.showFooter
+                ? "border-primary bg-primary/5"
+                : "border-border/60 hover:border-border bg-card"
+            )}
+          >
+            <p className="text-xs font-medium">no footer</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">clean image, no footer bar</p>
+          </button>
         </div>
       </div>
 
