@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { brief, aspectRatio, language, slideCount, withSubject, vibe, designStyle, colorPalette } = body
+  const { brief, aspectRatio, language, slideCount, withSubject, vibe, designStyle, colorPalette, captionMode } = body
   if (!brief) return NextResponse.json({ error: "brief is required" }, { status: 400 })
 
   const count = Math.min(Math.max(1, Number(slideCount) || 3), settings?.plan === "free" ? 5 : 10)
@@ -52,67 +52,88 @@ export async function POST(req: NextRequest) {
     withSubject: !!withSubject,
     vibe: vibe || "professional",
     designStyle: designStyle || "realistic",
+    captionMode: captionMode || "per_slide",
     colorPalette: colorPalette || [],
     status: "generating",
   })
 
   const lang = language === "en" ? "English" : "Indonesian"
-
-  // detect if the brief already contains pre-written slide content
+  const isSingleCaption = (captionMode || "per_slide") === "single"
   const hasPrewrittenSlides = /SLIDE\s*\d+/i.test(brief)
 
   const styleKeywords: Record<string, string> = {
-    realistic:    "DSLR photo, sharp focus, natural lighting, photorealistic",
+    realistic:    "photorealistic DSLR photo, sharp focus, natural lighting",
     illustration: "editorial illustration, vector-style, clean linework",
     "3d":         "3D render, octane render, subsurface scattering, depth of field",
     flat:         "flat design, geometric shapes, bold colors, no shadows",
     anime:        "anime style, cel shading, clean lineart, vibrant colors",
     watercolor:   "watercolor painting, wet-on-wet technique, soft edges, paper texture",
     abstract:     "abstract art, expressionist brushstrokes, textured layers",
-    minimal:      "minimalist design, negative space, single accent color, clean typography",
+    minimal:      "minimalist, negative space, single accent color, ultra-clean",
   }
   const styleHint = styleKeywords[designStyle || "realistic"] || styleKeywords.realistic
   const brandNote = identityData?.companyName
-    ? ` Brand context: ${identityData.companyName}${identityData.tagline ? ` — ${identityData.tagline}` : ""}.`
+    ? ` Brand: ${identityData.companyName}${identityData.tagline ? ` — ${identityData.tagline}` : ""}.`
     : ""
   const logoNote = identityData?.companyName && identityData?.logoPosition && identityData.logoPosition !== "none"
-    ? ` Reserve a clean uncluttered zone at the ${identityData.logoPosition.replace("-", " ")} for a brand logo overlay.${identityData.footerText ? ` Also reserve footer space for: "${identityData.footerText}".` : ""}`
+    ? ` Leave a clean uncluttered zone at the ${identityData.logoPosition.replace("-", " ")} for a logo overlay.`
     : ""
 
-  const captionPrompt = hasPrewrittenSlides
-    ? `You are a social media content designer. The user has already written the exact text for each slide. Your job is to extract each slide's text and create image prompts.
+  // IMPORTANT: image prompts must NEVER contain text/typography — text is overlaid separately
+  const imagePromptRule = `For "imagePrompt": describe ONLY the visual scene/background — colors, shapes, objects, mood, lighting. NO text, NO words, NO typography, NO captions in the image. The caption will be shown as a separate overlay.${logoNote} Style: ${styleHint}. Color palette: ${colorPalette?.join(", ") || "vibrant"}.${withSubject ? " Include a person/subject." : " No people."}${brandNote}`
 
-Brief (contains pre-written slides):
-${brief}
+  let captionPrompt: string
 
-Language: ${lang}
-Vibe: ${vibe}
-Design style: ${designStyle || "realistic"}
-Color palette: ${colorPalette?.join(", ") || "vibrant"}
-${withSubject ? "Include a person/subject in the design." : "No people — focus on objects, graphic elements, and text layout."}${brandNote}
-
-Return a JSON object with a "slides" key — an array of exactly ${count} objects. Rules:
-- "caption": copy the EXACT text from that slide in the brief. Do NOT rewrite or summarize it. Preserve emojis, bullet points, line breaks.
-- "hashtags": 5 relevant hashtags as a string
-- "imagePrompt": a social media graphic design prompt. Describe it as a DESIGNED SLIDE (not a plain photo): styled background, typography layout area, graphic elements that match the slide content. Style: ${styleHint}.${logoNote} The image must look like a finished social media carousel slide — include visual layout space for the slide text to be readable on top.
-
-Respond ONLY with valid JSON, no markdown, no extra text.`
-    : `You are a social media content writer. Create ${count} slide captions for a social media post.
+  if (isSingleCaption) {
+    captionPrompt = `You are a social media content writer. Write ONE caption for a social media post, then create ${count} different background image prompts (one per slide).
 
 Brief: ${brief}
 Language: ${lang}
 Vibe: ${vibe}
 Slide count: ${count}
-Design style: ${designStyle || "realistic"}
-Color palette: ${colorPalette?.join(", ") || "vibrant"}
-${withSubject ? "Include a person/subject in each image." : "No people — focus on objects, graphic elements, and abstract visuals."}${brandNote}
 
-Return a JSON object with a "slides" key — an array of exactly ${count} objects, each with:
-- "caption": engaging caption text (2-4 sentences) in ${lang}
-- "hashtags": 5 relevant hashtags as a string
-- "imagePrompt": a social media graphic design prompt — describe a DESIGNED SLIDE with styled background, graphic elements, and layout space for text overlay. Style: ${styleHint}.${logoNote}
+Return a JSON object with a "slides" key — an array of exactly ${count} objects. ALL slides share the same caption and hashtags, but each has a unique imagePrompt.
+- "caption": the SAME engaging caption for every slide (3-5 sentences) in ${lang}
+- "hashtags": the SAME 5 hashtags string for every slide
+- "imagePrompt": unique visual scene for this slide (different composition per slide)
+
+${imagePromptRule}
 
 Respond ONLY with valid JSON, no markdown, no extra text.`
+  } else if (hasPrewrittenSlides) {
+    captionPrompt = `You are a social media content assistant. The user has pre-written text for each slide. Extract each slide's text exactly and create image prompts.
+
+Brief:
+${brief}
+
+Language: ${lang}
+Vibe: ${vibe}
+
+Return a JSON object with a "slides" key — an array of exactly ${count} objects:
+- "caption": copy the EXACT text from that slide. Preserve emojis, bullets, line breaks. Do NOT rewrite.
+- "hashtags": 5 relevant hashtags as a string
+- "imagePrompt": visual background for this slide
+
+${imagePromptRule}
+
+Respond ONLY with valid JSON, no markdown, no extra text.`
+  } else {
+    captionPrompt = `You are a social media content writer. Create ${count} slide captions for a carousel post.
+
+Brief: ${brief}
+Language: ${lang}
+Vibe: ${vibe}
+Slide count: ${count}
+
+Return a JSON object with a "slides" key — an array of exactly ${count} objects:
+- "caption": engaging caption for this slide (2-4 sentences) in ${lang}
+- "hashtags": 5 relevant hashtags as a string
+- "imagePrompt": visual background for this slide
+
+${imagePromptRule}
+
+Respond ONLY with valid JSON, no markdown, no extra text.`
+  }
 
   function cleanRaw(s: string): string {
     return s

@@ -103,6 +103,7 @@ export const post = pgTable("post", {
   withSubject: boolean("with_subject").notNull().default(false),
   vibe: text("vibe").notNull().default("professional"),
   designStyle: varchar("design_style", { length: 30 }).notNull().default("realistic"),
+  captionMode: varchar("caption_mode", { length: 10 }).notNull().default("per_slide"), // per_slide | single
   colorPalette: jsonb("color_palette").$type<string[]>().notNull().default([]),
   status: varchar("status", { length: 20 }).notNull().default("pending"), // pending | generating | done | error
   errorMessage: text("error_message"),

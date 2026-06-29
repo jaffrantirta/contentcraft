@@ -24,6 +24,7 @@ interface FormState {
   language: "id" | "en"
   slideCount: number
   withSubject: boolean
+  captionMode: "per_slide" | "single"
   vibe: VibeId
   designStyle: StyleId
   colorPalette: PaletteId
@@ -38,6 +39,7 @@ export default function CreatePage() {
     language: "id",
     slideCount: 3,
     withSubject: false,
+    captionMode: "per_slide",
     vibe: "professional",
     designStyle: "realistic",
     colorPalette: "ocean",
@@ -199,6 +201,37 @@ export default function CreatePage() {
           >
             <User className="h-3.5 w-3.5" />
             with subject
+          </button>
+        </div>
+      </div>
+
+      {/* caption mode */}
+      <div className="space-y-3">
+        <Label className="text-xs font-medium">caption mode</Label>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => set("captionMode", "per_slide")}
+            className={cn(
+              "p-3 rounded-lg border text-left transition-colors",
+              form.captionMode === "per_slide"
+                ? "border-primary bg-primary/5"
+                : "border-border/60 hover:border-border bg-card"
+            )}
+          >
+            <p className="text-xs font-medium">per slide</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">unique caption for each image</p>
+          </button>
+          <button
+            onClick={() => set("captionMode", "single")}
+            className={cn(
+              "p-3 rounded-lg border text-left transition-colors",
+              form.captionMode === "single"
+                ? "border-primary bg-primary/5"
+                : "border-border/60 hover:border-border bg-card"
+            )}
+          >
+            <p className="text-xs font-medium">single caption</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">one caption for all images</p>
           </button>
         </div>
       </div>

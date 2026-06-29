@@ -21,13 +21,22 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
   )
   const imageModel = isByok && settings?.byokModel ? settings.byokModel : DEFAULT_IMAGE_MODEL
 
+  // map stored aspect ratio to image API size
+  const sizeMap: Record<string, string> = {
+    "1:1":  "1024x1024",
+    "4:5":  "1024x1536",
+    "9:16": "1024x1536",
+    "16:9": "1536x1024",
+  }
+  const imageSize = sizeMap[slideRow.post.aspectRatio] || "1024x1024"
+
   let imageUrl: string | null = null
 
   try {
     const imgRes = await client.images.generate({
       model: imageModel,
       prompt: slideRow.imagePrompt,
-      size: "1024x1024",
+      size: imageSize as "1024x1024" | "1024x1536" | "1536x1024",
       n: 1,
     })
     const imgData = imgRes.data?.[0]

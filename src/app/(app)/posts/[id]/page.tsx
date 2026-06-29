@@ -28,6 +28,7 @@ interface Post {
   status: string
   vibe: string
   designStyle: string
+  captionMode: string
   language: string
   aspectRatio: string
   slideCount: number
