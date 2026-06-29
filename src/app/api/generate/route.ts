@@ -62,9 +62,10 @@ export async function POST(req: NextRequest) {
   const lang = language === "en" ? "English" : "Indonesian"
   const isSingleCaption = (captionMode || "per_slide") === "single"
   const hasPrewrittenSlides = /SLIDE\s*\d+/i.test(brief)
-  const perSlideSection = Array.isArray(slideBriefs) && slideBriefs.some((s: string) => s?.trim())
-    ? `\n\nPer-slide content:\n${slideBriefs.slice(0, count).map((b: string, i: number) => `Slide ${i + 1}: ${b?.trim() || "(no specific brief)"}`).join("\n")}`
-    : ""
+  const hasPerSlideBriefs = Array.isArray(slideBriefs) && slideBriefs.some((s: string) => s?.trim())
+  const perSlideLines = hasPerSlideBriefs
+    ? slideBriefs.slice(0, count).map((b: string, i: number) => `Slide ${i + 1}: ${b?.trim() || "(see general brief)"}`)
+    : []
 
   const styleKeywords: Record<string, string> = {
     realistic:    "photorealistic DSLR photo, sharp focus, natural lighting",
@@ -87,21 +88,24 @@ export async function POST(req: NextRequest) {
   let captionPrompt: string
 
   if (isSingleCaption) {
-    captionPrompt = `You are a social media content writer. Write ONE caption for a social media post, then create ${count} different image prompts (one per slide).
+    const slidePart = hasPerSlideBriefs
+      ? `Each slide has a specific visual topic:\n${perSlideLines.join("\n")}\n\nGeneral context: ${brief}`
+      : `Brief: ${brief}`
+    captionPrompt = `You are a social media content writer. Create one shared caption for a ${count}-slide carousel, plus a unique image prompt per slide.
 
-General brief: ${brief}${perSlideSection}
+${slidePart}
 Language: ${lang}
 Vibe: ${vibe}
-Slide count: ${count}
 
-Return a JSON object with a "slides" key — an array of exactly ${count} objects. ALL slides share the same caption and hashtags, but each has a unique imagePrompt based on its per-slide content.
-- "caption": the SAME engaging caption for every slide (3-5 sentences) in ${lang}
-- "hashtags": the SAME 5 hashtags string for every slide
-- "imagePrompt": unique visual scene for this slide based on its per-slide content
+Return a JSON object with a "slides" key — array of exactly ${count} objects. ALL slides share the same caption and hashtags but each has a UNIQUE imagePrompt based on its slide topic.
+- "caption": ONE engaging caption (3-5 sentences) in ${lang} — same for all slides
+- "hashtags": 5 hashtags — same for all slides
+- "imagePrompt": unique visual scene for this slide's specific topic
 
 ${imagePromptRule}
 
 Respond ONLY with valid JSON, no markdown, no extra text.`
+
   } else if (hasPrewrittenSlides) {
     captionPrompt = `You are a social media content assistant. The user has pre-written text for each slide. Extract each slide's text exactly and create image prompts.
 
@@ -111,28 +115,48 @@ ${brief}
 Language: ${lang}
 Vibe: ${vibe}
 
-Return a JSON object with a "slides" key — an array of exactly ${count} objects:
-- "caption": copy the EXACT text from that slide. Preserve emojis, bullets, line breaks. Do NOT rewrite.
-- "hashtags": 5 relevant hashtags as a string
+Return a JSON object with a "slides" key — array of exactly ${count} objects:
+- "caption": EXACT text from that slide. Preserve emojis, bullets, line breaks. Do NOT rewrite.
+- "hashtags": 5 relevant hashtags
 - "imagePrompt": visual scene for this slide
 
 ${imagePromptRule}
 
 Respond ONLY with valid JSON, no markdown, no extra text.`
+
+  } else if (hasPerSlideBriefs) {
+    captionPrompt = `You are a social media content writer. Create a ${count}-slide carousel. Each slide has its own specific content — treat each slide's brief as the EXACT topic for that slide.
+
+SLIDE BRIEFS (each slide must be about its own topic — do NOT repeat the same message):
+${perSlideLines.join("\n")}
+
+General context / brand: ${brief}
+Language: ${lang}
+Vibe: ${vibe}
+
+Return a JSON object with a "slides" key — array of exactly ${count} objects in the same order as the slide briefs:
+- "caption": caption in ${lang} for THIS slide's specific topic (2-4 sentences). Must be unique and different from other slides.
+- "hashtags": 5 relevant hashtags
+- "imagePrompt": visual scene that matches THIS slide's specific topic
+
+${imagePromptRule}
+
+Respond ONLY with valid JSON, no markdown, no extra text.`
+
   } else {
     captionPrompt = `You are a social media content writer. Create ${count} slide captions for a carousel post.
 
-General brief: ${brief}${perSlideSection}
+Brief: ${brief}
 Language: ${lang}
 Vibe: ${vibe}
 Slide count: ${count}
 
-Each slide's caption and image must be based on its specific per-slide content. Make each slide distinct and focused on its own topic.
+Make each slide cover a different angle or point. Do NOT repeat the same message across slides.
 
-Return a JSON object with a "slides" key — an array of exactly ${count} objects:
-- "caption": caption for this slide in ${lang}, based on that slide's specific content (2-4 sentences)
-- "hashtags": 5 relevant hashtags as a string
-- "imagePrompt": visual scene for this slide matching its specific content
+Return a JSON object with a "slides" key — array of exactly ${count} objects:
+- "caption": caption for this slide in ${lang} (2-4 sentences)
+- "hashtags": 5 relevant hashtags
+- "imagePrompt": visual scene for this slide
 
 ${imagePromptRule}
 

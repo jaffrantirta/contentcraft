@@ -289,7 +289,13 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* image area */}
         <div className="space-y-4">
-          <div className="aspect-square rounded-xl overflow-hidden bg-muted flex items-center justify-center border border-border/60">
+          <div className={cn(
+            "rounded-xl overflow-hidden bg-muted flex items-center justify-center border border-border/60",
+            post.aspectRatio === "16:9" ? "aspect-video" :
+            post.aspectRatio === "4:5"  ? "aspect-[4/5]" :
+            post.aspectRatio === "9:16" ? "aspect-[9/16]" :
+            "aspect-square"
+          )}>
             {currentSlideGenerating ? (
               <div className="w-full h-full bg-muted animate-pulse flex items-center justify-center">
                 <div className="text-center space-y-2">
@@ -332,9 +338,14 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                 <button
                   key={s.id}
                   onClick={() => setActiveSlide(i)}
-                  className={`shrink-0 w-14 h-14 rounded-lg overflow-hidden border-2 transition-colors ${
+                  className={cn(
+                    "shrink-0 rounded-lg overflow-hidden border-2 transition-colors",
+                    post.aspectRatio === "16:9" ? "w-20 h-[45px]" :
+                    post.aspectRatio === "4:5"  ? "w-11 h-[55px]" :
+                    post.aspectRatio === "9:16" ? "w-8 h-[57px]" :
+                    "w-14 h-14",
                     activeSlide === i ? "border-primary" : "border-border/40 hover:border-border"
-                  }`}
+                  )}
                 >
                   {generatingSlides.has(s.id) ? (
                     <div className="w-full h-full bg-muted animate-pulse flex items-center justify-center">
