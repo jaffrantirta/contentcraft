@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
-import { VIBES, COLOR_PALETTES, ASPECT_RATIOS } from "@/lib/tokenrouter"
+import { VIBES, COLOR_PALETTES, ASPECT_RATIOS, DESIGN_STYLES } from "@/lib/tokenrouter"
 import { Sparkles, Loader2, User, UserX } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { GeneratingAnimation } from "@/components/app/generating-animation"
@@ -16,6 +16,7 @@ import { GeneratingAnimation } from "@/components/app/generating-animation"
 type AspectRatioId = typeof ASPECT_RATIOS[number]["id"]
 type VibeId = typeof VIBES[number]["id"]
 type PaletteId = typeof COLOR_PALETTES[number]["id"]
+type StyleId = typeof DESIGN_STYLES[number]["id"]
 
 interface FormState {
   brief: string
@@ -24,6 +25,7 @@ interface FormState {
   slideCount: number
   withSubject: boolean
   vibe: VibeId
+  designStyle: StyleId
   colorPalette: PaletteId
 }
 
@@ -37,6 +39,7 @@ export default function CreatePage() {
     slideCount: 3,
     withSubject: false,
     vibe: "professional",
+    designStyle: "realistic",
     colorPalette: "ocean",
   })
 
@@ -220,6 +223,29 @@ export default function CreatePage() {
               <span className="text-base">{v.emoji}</span>
               <p className="text-xs font-medium mt-1">{v.label}</p>
               <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{v.description}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* design style */}
+      <div className="space-y-3">
+        <Label className="text-xs font-medium">design style</Label>
+        <div className="grid grid-cols-2 gap-2">
+          {DESIGN_STYLES.map(s => (
+            <button
+              key={s.id}
+              onClick={() => set("designStyle", s.id)}
+              className={cn(
+                "p-3 rounded-lg border text-left transition-colors",
+                form.designStyle === s.id
+                  ? "border-primary bg-primary/5"
+                  : "border-border/60 hover:border-border bg-card"
+              )}
+            >
+              <span className="text-base">{s.emoji}</span>
+              <p className="text-xs font-medium mt-1">{s.label}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{s.description}</p>
             </button>
           ))}
         </div>

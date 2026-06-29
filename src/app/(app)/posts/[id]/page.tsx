@@ -27,6 +27,7 @@ interface Post {
   brief: string
   status: string
   vibe: string
+  designStyle: string
   language: string
   aspectRatio: string
   slideCount: number
@@ -220,6 +221,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
           slideCount: post.slideCount,
           withSubject: post.withSubject,
           vibe: post.vibe,
+          designStyle: post.designStyle,
           colorPalette: post.colorPalette,
         }),
       })
@@ -286,6 +288,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
           <div className="hidden sm:flex items-center gap-2">
             <Badge variant="secondary" className="text-[10px]">{post.status}</Badge>
             <Badge variant="outline" className="text-[10px]">{post.vibe}</Badge>
+            <Badge variant="outline" className="text-[10px]">{post.designStyle}</Badge>
             <Badge variant="outline" className="text-[10px]">{post.language}</Badge>
           </div>
           <Button

@@ -102,6 +102,7 @@ export const post = pgTable("post", {
   slideCount: integer("slide_count").notNull().default(3),
   withSubject: boolean("with_subject").notNull().default(false),
   vibe: text("vibe").notNull().default("professional"),
+  designStyle: varchar("design_style", { length: 30 }).notNull().default("realistic"),
   colorPalette: jsonb("color_palette").$type<string[]>().notNull().default([]),
   status: varchar("status", { length: 20 }).notNull().default("pending"), // pending | generating | done | error
   errorMessage: text("error_message"),

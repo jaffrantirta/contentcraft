@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { brief, aspectRatio, language, slideCount, withSubject, vibe, colorPalette } = body
+  const { brief, aspectRatio, language, slideCount, withSubject, vibe, designStyle, colorPalette } = body
   if (!brief) return NextResponse.json({ error: "brief is required" }, { status: 400 })
 
   const count = Math.min(Math.max(1, Number(slideCount) || 3), settings?.plan === "free" ? 5 : 10)
@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
     slideCount: count,
     withSubject: !!withSubject,
     vibe: vibe || "professional",
+    designStyle: designStyle || "realistic",
     colorPalette: colorPalette || [],
     status: "generating",
   })
@@ -67,9 +68,9 @@ Return a JSON object with a "slides" key containing an array of exactly ${count}
 - "hashtags": 5 relevant hashtags as a string
 - "imagePrompt": a detailed image generation prompt for this slide
 
-Style: ${vibe}. Color palette: ${colorPalette?.join(", ") || "vibrant"}.${withSubject ? " Include a person/subject in the design." : " No person in the design, focus on objects, text, and abstract visuals."}${identityData?.companyName ? ` Brand: ${identityData.companyName}${identityData.tagline ? ` — ${identityData.tagline}` : ""}.` : ""}
+Style: ${vibe}. Design style: ${designStyle || "realistic"}. Color palette: ${colorPalette?.join(", ") || "vibrant"}.${withSubject ? " Include a person/subject in the design." : " No person in the design, focus on objects, text, and abstract visuals."}${identityData?.companyName ? ` Brand: ${identityData.companyName}${identityData.tagline ? ` — ${identityData.tagline}` : ""}.` : ""}
 
-For the imagePrompt field of each slide: create a detailed visual prompt.${identityData?.companyName && identityData?.logoPosition && identityData.logoPosition !== "none" ? ` Reserve a clear area at the ${identityData.logoPosition.replace("-", " ")} of the image for a brand logo. Leave that zone clean and uncluttered so a logo can be overlaid.${identityData.footerText ? ` Also reserve the footer area for text: "${identityData.footerText}".` : ""}` : ""}
+For the imagePrompt field of each slide: create a detailed visual prompt that clearly specifies the "${designStyle || "realistic"}" art style — use style-specific language (e.g. for 3d: "octane render, subsurface scattering"; for watercolor: "wet-on-wet technique, paper texture"; for anime: "cel shading, clean lineart"; for realistic: "DSLR photo, sharp focus, natural lighting"; for illustration: "editorial illustration, vector-style"; for flat: "flat design, geometric shapes, no shadows"; for abstract: "abstract expressionism, textured brushstrokes"; for minimal: "minimalist, negative space, single accent color").${identityData?.companyName && identityData?.logoPosition && identityData.logoPosition !== "none" ? ` Reserve a clear area at the ${identityData.logoPosition.replace("-", " ")} of the image for a brand logo. Leave that zone clean and uncluttered so a logo can be overlaid.${identityData.footerText ? ` Also reserve the footer area for text: "${identityData.footerText}".` : ""}` : ""}
 
 Respond ONLY with valid JSON, no markdown, no extra text.`
 

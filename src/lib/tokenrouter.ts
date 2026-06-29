@@ -40,6 +40,17 @@ export const COLOR_PALETTES = [
   { id: "pastel", name: "pastel", colors: ["#FFD6E0", "#C1E1C1", "#BDE0FE"] },
 ] as const
 
+export const DESIGN_STYLES = [
+  { id: "realistic",    label: "realistic",    emoji: "📷", description: "photorealistic, real-world photography" },
+  { id: "illustration", label: "illustration", emoji: "🎨", description: "hand-drawn, illustrated artwork" },
+  { id: "3d",           label: "3d render",    emoji: "💎", description: "3D CGI, glossy materials, depth" },
+  { id: "flat",         label: "flat design",  emoji: "◼️", description: "clean geometric shapes, bold colors" },
+  { id: "anime",        label: "anime",        emoji: "⛩️", description: "japanese anime / manga style" },
+  { id: "watercolor",   label: "watercolor",   emoji: "🖌️", description: "soft watercolor painting, organic edges" },
+  { id: "abstract",     label: "abstract",     emoji: "🌀", description: "abstract art, shapes and textures" },
+  { id: "minimal",      label: "minimal",      emoji: "⬜", description: "ultra-minimal, line art, lots of white space" },
+] as const
+
 export const ASPECT_RATIOS = [
   { id: "1:1", label: "square", description: "1:1 — instagram post", width: 1024, height: 1024 },
   { id: "4:5", label: "portrait", description: "4:5 — instagram portrait", width: 896, height: 1120 },
