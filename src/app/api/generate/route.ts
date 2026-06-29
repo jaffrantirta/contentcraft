@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     : {}
   const client = getTokenRouterClient(clientConfig)
   const imageModel = (isByok && settings?.byokModel) ? settings.byokModel : DEFAULT_IMAGE_MODEL
-  const chatModel = DEFAULT_CHAT_MODEL
+  const chatModel = (isByok && settings?.byokChatModel) ? settings.byokChatModel : DEFAULT_CHAT_MODEL
 
   // create post record
   const postId = uuidv4()
@@ -74,8 +74,15 @@ Respond ONLY with valid JSON, no markdown, no extra text.`
 
   let slidesData: Array<{ caption: string; hashtags: string; imagePrompt: string }> = []
 
+  function cleanRaw(s: string): string {
+    return s
+      .replace(/<think>[\s\S]*?<\/think>/gi, "") // strip <think>...</think> reasoning blocks
+      .replace(/^```(?:json)?\n?/im, "")         // strip opening code fence
+      .replace(/\n?```$/im, "")                  // strip closing code fence
+      .trim()
+  }
+
   try {
-    // try with json_object first, fall back to plain text if model doesn't support it
     let raw = "{}"
     try {
       const chatRes = await client.chat.completions.create({
@@ -83,16 +90,14 @@ Respond ONLY with valid JSON, no markdown, no extra text.`
         messages: [{ role: "user", content: captionPrompt }],
         response_format: { type: "json_object" },
       })
-      raw = chatRes.choices[0]?.message?.content || "{}"
+      raw = cleanRaw(chatRes.choices[0]?.message?.content || "{}")
     } catch {
-      // model may not support response_format, retry without it
+      // model doesn't support response_format — retry as plain text
       const chatRes = await client.chat.completions.create({
         model: chatModel,
         messages: [{ role: "user", content: captionPrompt }],
       })
-      raw = chatRes.choices[0]?.message?.content || "{}"
-      // strip markdown code fences if present
-      raw = raw.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim()
+      raw = cleanRaw(chatRes.choices[0]?.message?.content || "{}")
     }
 
     const parsed = JSON.parse(raw)

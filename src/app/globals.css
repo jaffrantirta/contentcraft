@@ -127,4 +127,39 @@
   html {
     @apply font-sans;
   }
+  /* prevent iOS Safari from zooming on input focus */
+  input, textarea, select {
+    font-size: 16px;
+  }
+}
+
+/* generating animation keyframes */
+@keyframes cc-draw-border {
+  from { stroke-dashoffset: 900; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes cc-slide-in {
+  from { transform: translateX(-14px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes cc-fade-up {
+  from { transform: translateY(10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes cc-float {
+  0%   { transform: translateY(0px)   rotate(0deg);   opacity: 0.7; }
+  100% { transform: translateY(-140px) rotate(45deg); opacity: 0; }
+}
+@keyframes cc-shimmer {
+  0%   { background-position: -300% 0; }
+  100% { background-position:  300% 0; }
+}
+@keyframes cc-pop {
+  0%   { transform: scale(0.7); opacity: 0; }
+  70%  { transform: scale(1.05); }
+  100% { transform: scale(1);   opacity: 1; }
+}
+@keyframes cc-blink {
+  0%, 100% { opacity: 0.2; transform: scaleY(0.6); }
+  50%       { opacity: 1;   transform: scaleY(1); }
 }

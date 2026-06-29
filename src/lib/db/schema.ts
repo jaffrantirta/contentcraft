@@ -65,7 +65,8 @@ export const userSettings = pgTable("user_settings", {
   userId: text("user_id").notNull().unique().references(() => user.id, { onDelete: "cascade" }),
   byokApiKey: text("byok_api_key"),
   byokBaseUrl: text("byok_base_url"),
-  byokModel: text("byok_model"),
+  byokModel: text("byok_model"),       // image model
+  byokChatModel: text("byok_chat_model"), // chat/caption model
   plan: varchar("plan", { length: 20 }).notNull().default("free"), // free | byok | pro
   freeGenerationsUsed: integer("free_generations_used").notNull().default(0),
   createdAt: timestamp("created_at").notNull().defaultNow(),

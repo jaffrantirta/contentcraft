@@ -11,6 +11,7 @@ import { toast } from "sonner"
 import { VIBES, COLOR_PALETTES, ASPECT_RATIOS } from "@/lib/tokenrouter"
 import { Sparkles, Loader2, User, UserX } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { GeneratingAnimation } from "@/components/app/generating-animation"
 
 type AspectRatioId = typeof ASPECT_RATIOS[number]["id"]
 type VibeId = typeof VIBES[number]["id"]
@@ -79,6 +80,8 @@ export default function CreatePage() {
   }
 
   return (
+    <>
+    {loading && <GeneratingAnimation slideCount={form.slideCount} />}
     <div className="max-w-2xl space-y-6 md:space-y-8 pb-24">
       <div>
         <h1 className="text-xl md:text-2xl font-bold tracking-tight">create new post</h1>
@@ -270,5 +273,6 @@ export default function CreatePage() {
         </div>
       </div>
     </div>
+    </>
   )
 }
