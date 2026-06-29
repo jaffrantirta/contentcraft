@@ -7,6 +7,8 @@ import { eq } from "drizzle-orm"
 import { v4 as uuidv4 } from "uuid"
 import { headers } from "next/headers"
 
+export const maxDuration = 60
+
 export async function POST(req: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
@@ -61,14 +63,14 @@ Language: ${lang}
 Vibe: ${vibe}
 Slide count: ${count}
 
-Return a JSON array with exactly ${count} objects. Each object has:
+Return a JSON object with a "slides" key containing an array of exactly ${count} objects. Each object must have:
 - "caption": engaging caption text (2-4 sentences)
 - "hashtags": 5 relevant hashtags as a string
 - "imagePrompt": a detailed image generation prompt for this slide
 
 The image prompts should be vivid and visual. Style: ${vibe}. Color palette: ${colorPalette?.join(", ") || "vibrant"}.${withSubject ? " Include a person/subject in the design." : " No person in the design, focus on objects, text, and abstract visuals."}
 
-Respond ONLY with the JSON array, no markdown.`
+Respond ONLY with valid JSON, no markdown, no extra text.`
 
   let slidesData: Array<{ caption: string; hashtags: string; imagePrompt: string }> = []
 
@@ -79,12 +81,21 @@ Respond ONLY with the JSON array, no markdown.`
       response_format: { type: "json_object" },
     })
 
-    const raw = chatRes.choices[0]?.message?.content || "[]"
+    const raw = chatRes.choices[0]?.message?.content || "{}"
     const parsed = JSON.parse(raw)
-    slidesData = Array.isArray(parsed) ? parsed : parsed.slides || parsed.data || []
-  } catch {
-    await db.update(post).set({ status: "error", errorMessage: "caption generation failed" }).where(eq(post.id, postId))
-    return NextResponse.json({ error: "caption generation failed" }, { status: 500 })
+    // handle various shapes the model might return
+    slidesData = Array.isArray(parsed)
+      ? parsed
+      : parsed.slides || parsed.data || parsed.captions || Object.values(parsed)[0] || []
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    await db.update(post).set({ status: "error", errorMessage: `caption failed: ${msg}` }).where(eq(post.id, postId))
+    return NextResponse.json({ error: "caption generation failed", detail: msg }, { status: 500 })
+  }
+
+  if (!slidesData.length) {
+    await db.update(post).set({ status: "error", errorMessage: "no slides returned from AI" }).where(eq(post.id, postId))
+    return NextResponse.json({ error: "no slides data returned" }, { status: 500 })
   }
 
   // generate images in parallel (max 5 concurrently)
@@ -98,11 +109,11 @@ Respond ONLY with the JSON array, no markdown.`
           model: imageModel,
           prompt: s.imagePrompt,
           size: "1024x1024",
-          quality: "standard",
           n: 1,
         })
         imageUrl = imgRes.data?.[0]?.url || null
-      } catch {
+      } catch (err) {
+        console.error(`image gen failed for slide ${i}:`, err instanceof Error ? err.message : err)
         imageUrl = null
       }
 
