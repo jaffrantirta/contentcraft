@@ -15,10 +15,12 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
 
   const userId = session.user.id
-  const [settings, identityData] = await Promise.all([
-    db.query.userSettings.findFirst({ where: eq(userSettings.userId, userId) }),
-    db.query.identity.findFirst({ where: eq(identity.userId, userId) }),
-  ])
+
+  const settings = await db.query.userSettings.findFirst({ where: eq(userSettings.userId, userId) })
+    .catch((err: unknown) => { console.error("[generate] userSettings query failed:", err); return undefined })
+
+  const identityData = await db.query.identity.findFirst({ where: eq(identity.userId, userId) })
+    .catch((err: unknown) => { console.error("[generate] identity query failed:", err); return undefined })
 
   if (!settings || settings.plan === "free") {
     const used = settings?.freeGenerationsUsed ?? 0
@@ -83,6 +85,7 @@ Respond ONLY with valid JSON, no markdown, no extra text.`
 
   try {
     let raw = "{}"
+    console.log(`[generate] calling chat model: ${chatModel}`)
     try {
       const chatRes = await client.chat.completions.create({
         model: chatModel,
@@ -90,7 +93,8 @@ Respond ONLY with valid JSON, no markdown, no extra text.`
         response_format: { type: "json_object" },
       })
       raw = cleanRaw(chatRes.choices[0]?.message?.content || "{}")
-    } catch {
+    } catch (firstErr) {
+      console.error("[generate] chat with response_format failed, retrying without:", firstErr)
       const chatRes = await client.chat.completions.create({
         model: chatModel,
         messages: [{ role: "user", content: captionPrompt }],
@@ -98,12 +102,15 @@ Respond ONLY with valid JSON, no markdown, no extra text.`
       raw = cleanRaw(chatRes.choices[0]?.message?.content || "{}")
     }
 
+    console.log("[generate] raw response length:", raw.length, "| preview:", raw.slice(0, 120))
     const parsed = JSON.parse(raw)
     slidesData = Array.isArray(parsed)
       ? parsed
       : parsed.slides || parsed.data || parsed.captions || (Object.values(parsed)[0] as typeof slidesData) || []
+    console.log("[generate] parsed slides:", slidesData.length)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
+    console.error("[generate] caption generation failed:", msg)
     await db.update(post).set({ status: "error", errorMessage: `caption failed: ${msg}` }).where(eq(post.id, postId))
     return NextResponse.json({ error: "caption generation failed", detail: msg }, { status: 500 })
   }
