@@ -6,7 +6,7 @@ import { getTokenRouterClient, DEFAULT_IMAGE_MODEL } from "@/lib/tokenrouter"
 import { eq, and } from "drizzle-orm"
 import { headers } from "next/headers"
 
-export const maxDuration = 45
+export const maxDuration = 120
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth.api.getSession({ headers: await headers() })
