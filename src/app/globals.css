@@ -127,9 +127,9 @@
   html {
     @apply font-sans;
   }
-  /* prevent iOS Safari from zooming on input focus */
+  /* prevent iOS Safari from zooming on input focus — !important beats Tailwind text-sm */
   input, textarea, select {
-    font-size: 16px;
+    font-size: 16px !important;
   }
 }
 
