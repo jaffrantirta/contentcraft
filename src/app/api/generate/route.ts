@@ -60,7 +60,9 @@ export async function POST(req: NextRequest) {
   })
 
   const lang = language === "en" ? "English" : "Indonesian"
-  const isSingleCaption = (captionMode || "per_slide") === "single"
+  const effectiveCaptionMode = captionMode || "per_slide"
+  const isSingleCaption = effectiveCaptionMode === "single"
+  const isNoCaption = effectiveCaptionMode === "none"
   const hasPrewrittenSlides = /SLIDE\s*\d+/i.test(brief)
   const hasPerSlideBriefs = Array.isArray(slideBriefs) && slideBriefs.some((s: string) => s?.trim())
   const perSlideLines = hasPerSlideBriefs
@@ -87,7 +89,11 @@ export async function POST(req: NextRequest) {
 
   let captionPrompt: string
 
-  if (isSingleCaption) {
+  if (isNoCaption) {
+    // no caption at all — only need image prompts per slide
+    captionPrompt = "" // handled via parallel path below
+
+  } else if (isSingleCaption) {
     const slidePart = hasPerSlideBriefs
       ? `Each slide has a specific visual topic:\n${perSlideLines.join("\n")}\n\nGeneral context: ${brief}`
       : `Brief: ${brief}`
@@ -176,7 +182,34 @@ Respond ONLY with valid JSON, no markdown, no extra text.`
   }
 
   try {
-    if (hasPerSlideBriefs) {
+    if (isNoCaption) {
+      // no captions — generate only imagePrompts, one call per slide in parallel
+      console.log(`[generate] no-caption mode: generating ${count} image prompts`)
+      const briefs = hasPerSlideBriefs
+        ? slideBriefs.slice(0, count)
+        : Array.from({ length: count }, () => brief)
+      slidesData = await Promise.all(
+        briefs.map(async (slideBrief: string, i: number) => {
+          const slidePrompt = `Describe a visual scene for a social media slide image.
+
+Topic: ${slideBrief?.trim() || brief}
+Context: ${brief}
+Vibe: ${vibe}
+
+Return a JSON object with only:
+- "imagePrompt": visual scene description (background, mood, colors, composition)
+
+${imagePromptRule}
+
+Respond ONLY with valid JSON.`
+          const raw = await callChat(slidePrompt)
+          const parsed = JSON.parse(raw)
+          return { caption: "", hashtags: "", imagePrompt: parsed.imagePrompt || "" }
+        })
+      )
+      console.log(`[generate] no-caption image prompts done: ${slidesData.length}`)
+
+    } else if (hasPerSlideBriefs) {
       // one AI call per slide in parallel — each only sees its own brief, no chance to repeat
       console.log(`[generate] parallel per-slide generation: ${count} slides`)
       slidesData = await Promise.all(
@@ -206,6 +239,7 @@ Respond ONLY with valid JSON.`
         })
       )
       console.log(`[generate] parallel generation done: ${slidesData.length} slides`)
+
     } else {
       let raw = "{}"
       console.log(`[generate] calling chat model: ${chatModel}`)

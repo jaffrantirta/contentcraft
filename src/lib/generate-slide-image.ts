@@ -9,7 +9,7 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
     with: { post: true },
   })
 
-  if (!slideRow || slideRow.post.userId !== userId || !slideRow.imagePrompt || !slideRow.caption) return null
+  if (!slideRow || slideRow.post.userId !== userId || !slideRow.imagePrompt) return null
 
   const [settings, identityRow] = await Promise.all([
     db.query.userSettings.findFirst({ where: eq(userSettings.userId, userId) }),
@@ -33,12 +33,20 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
 
   let imageUrl: string | null = null
 
-  // build prompt: visual scene + caption + footer + logo zone
-  let fullPrompt = `${slideRow.imagePrompt}
+  const captionMode = slideRow.post.captionMode ?? "per_slide"
+
+  // build prompt: visual scene + optional caption text + footer + logo zone
+  let fullPrompt = slideRow.imagePrompt
+
+  // only burn caption text into the image for per_slide mode
+  // single = one post caption shown separately; none = no caption at all
+  if (captionMode === "per_slide" && slideRow.caption) {
+    fullPrompt += `
 
 Typography: render the following caption as bold, legible text integrated into the design. Match the font style to the visual aesthetic. Ensure strong contrast (white text on dark backgrounds, dark text on light backgrounds):
 
 "${slideRow.caption}"`
+  }
 
   // footer: burn consistent footer text on every slide (only if post has showFooter = true)
   if (identityRow?.footerText && slideRow.post.showFooter !== false) {

@@ -392,27 +392,38 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                 </span>
               )}
             </p>
-            <h2 className="text-sm font-semibold">caption</h2>
+            {post.captionMode !== "none" && (
+              <h2 className="text-sm font-semibold">
+                {post.captionMode === "single" ? "caption" : "caption"}
+              </h2>
+            )}
           </div>
 
-          <Card className="p-4 space-y-3">
-            <p className="text-sm leading-relaxed">{currentSlide?.caption || "no caption generated"}</p>
-            {currentSlide?.hashtags && (
-              <>
-                <Separator />
-                <p className="text-xs text-muted-foreground font-mono">{currentSlide.hashtags}</p>
-              </>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs h-8 gap-2 w-full"
-              onClick={() => copyCaption(currentSlide?.caption || null, currentSlide?.hashtags || null)}
-            >
-              <Copy className="h-3.5 w-3.5" />
-              copy caption + hashtags
-            </Button>
-          </Card>
+          {post.captionMode === "none" ? (
+            <p className="text-xs text-muted-foreground">no caption — pure visual slides</p>
+          ) : (
+            <Card className="p-4 space-y-3">
+              {post.captionMode === "single" && (
+                <p className="text-[10px] text-muted-foreground">single caption (same for all slides)</p>
+              )}
+              <p className="text-sm leading-relaxed">{currentSlide?.caption || "—"}</p>
+              {currentSlide?.hashtags && (
+                <>
+                  <Separator />
+                  <p className="text-xs text-muted-foreground font-mono">{currentSlide.hashtags}</p>
+                </>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs h-8 gap-2 w-full"
+                onClick={() => copyCaption(currentSlide?.caption || null, currentSlide?.hashtags || null)}
+              >
+                <Copy className="h-3.5 w-3.5" />
+                copy caption + hashtags
+              </Button>
+            </Card>
+          )}
 
           {currentSlide?.imagePrompt && (
             <div className="space-y-2">

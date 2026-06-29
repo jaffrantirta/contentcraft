@@ -24,7 +24,7 @@ interface FormState {
   language: "id" | "en"
   slideCount: number
   withSubject: boolean
-  captionMode: "per_slide" | "single"
+  captionMode: "per_slide" | "single" | "none"
   showFooter: boolean
   vibe: VibeId
   designStyle: StyleId
@@ -250,7 +250,7 @@ export default function CreatePage() {
       {/* caption mode */}
       <div className="space-y-3">
         <Label className="text-xs font-medium">caption mode</Label>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <button
             onClick={() => set("captionMode", "per_slide")}
             className={cn(
@@ -261,7 +261,7 @@ export default function CreatePage() {
             )}
           >
             <p className="text-xs font-medium">per slide</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">unique caption for each image</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">text burned into each image</p>
           </button>
           <button
             onClick={() => set("captionMode", "single")}
@@ -272,8 +272,20 @@ export default function CreatePage() {
                 : "border-border/60 hover:border-border bg-card"
             )}
           >
-            <p className="text-xs font-medium">single caption</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">one caption for all images</p>
+            <p className="text-xs font-medium">single</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">one post caption, clean images</p>
+          </button>
+          <button
+            onClick={() => set("captionMode", "none")}
+            className={cn(
+              "p-3 rounded-lg border text-left transition-colors",
+              form.captionMode === "none"
+                ? "border-primary bg-primary/5"
+                : "border-border/60 hover:border-border bg-card"
+            )}
+          >
+            <p className="text-xs font-medium">none</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">no caption, pure visuals</p>
           </button>
         </div>
       </div>
