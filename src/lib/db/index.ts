@@ -14,8 +14,14 @@ function getDb(): DrizzleDb {
   return _db
 }
 
+// Proxy with proper `this` binding so Drizzle's internal methods work correctly
 export const db = new Proxy({} as DrizzleDb, {
   get(_target, prop) {
-    return getDb()[prop as keyof DrizzleDb]
+    const instance = getDb()
+    const value = instance[prop as keyof DrizzleDb]
+    if (typeof value === "function") {
+      return (value as (...args: unknown[]) => unknown).bind(instance)
+    }
+    return value
   },
 })
