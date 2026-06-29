@@ -1,6 +1,6 @@
 "use client"
 
-import { use, useEffect, useRef, useState } from "react"
+import { use, useCallback, useEffect, useRef, useState } from "react"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -9,6 +9,7 @@ import { toast } from "sonner"
 import { ArrowLeft, Copy, Download, ImageOff } from "lucide-react"
 import Link from "next/link"
 import { GeneratingAnimation } from "@/components/app/generating-animation"
+import { cn } from "@/lib/utils"
 
 interface Slide {
   id: string
@@ -33,6 +34,27 @@ interface Post {
   slides: Slide[]
 }
 
+type LogoPosition = "none" | "top-left" | "top-center" | "top-right" | "footer-left" | "footer-center" | "footer-right"
+
+interface Identity {
+  companyName: string | null
+  logoUrl: string | null
+  logoPosition: LogoPosition
+  footerText: string | null
+}
+
+function logoOverlayClass(position: LogoPosition): string {
+  switch (position) {
+    case "top-left":    return "top-2 left-2 justify-start"
+    case "top-center":  return "top-2 left-0 right-0 justify-center"
+    case "top-right":   return "top-2 right-2 justify-end"
+    case "footer-left":   return "bottom-0 left-0 right-0 justify-start px-2 py-1.5 bg-black/30"
+    case "footer-center": return "bottom-0 left-0 right-0 justify-center py-1.5 bg-black/30"
+    case "footer-right":  return "bottom-0 left-0 right-0 justify-end px-2 py-1.5 bg-black/30"
+    default: return ""
+  }
+}
+
 async function getPost(id: string): Promise<Post | null> {
   const res = await fetch(`/api/posts/${id}`)
   if (!res.ok) return null
@@ -42,14 +64,19 @@ async function getPost(id: string): Promise<Post | null> {
 export default function PostDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const [post, setPost] = useState<Post | null>(null)
+  const [identity, setIdentity] = useState<Identity | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeSlide, setActiveSlide] = useState(0)
   const [generatingSlides, setGeneratingSlides] = useState<Set<string>>(new Set())
   const generationStarted = useRef(false)
 
   useEffect(() => {
-    getPost(id).then(data => {
-      setPost(data)
+    Promise.all([
+      getPost(id),
+      fetch("/api/identity").then(r => r.ok ? r.json() : null),
+    ]).then(([postData, identityData]) => {
+      setPost(postData)
+      if (identityData) setIdentity(identityData)
     }).finally(() => setLoading(false))
   }, [id])
 
@@ -97,6 +124,83 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
     navigator.clipboard.writeText(text)
     toast.success("copied to clipboard")
   }
+
+  const downloadSlide = useCallback(async (imageUrl: string, slideNum: number) => {
+    const logoUrl = identity?.logoUrl
+    const logoPos = identity?.logoPosition ?? "none"
+
+    if (!logoUrl || logoPos === "none") {
+      const a = document.createElement("a")
+      a.href = imageUrl
+      a.download = `slide-${slideNum}.png`
+      a.target = "_blank"
+      a.click()
+      return
+    }
+
+    try {
+      const proxyUrl = (url: string) =>
+        url.startsWith("data:") ? url : `/api/proxy-image?url=${encodeURIComponent(url)}`
+
+      const loadImg = (src: string) =>
+        new Promise<HTMLImageElement>((resolve, reject) => {
+          const img = new Image()
+          img.crossOrigin = "anonymous"
+          img.onload = () => resolve(img)
+          img.onerror = reject
+          img.src = src
+        })
+
+      const [base, logo] = await Promise.all([
+        loadImg(proxyUrl(imageUrl)),
+        loadImg(proxyUrl(logoUrl)),
+      ])
+
+      const canvas = document.createElement("canvas")
+      canvas.width = base.naturalWidth
+      canvas.height = base.naturalHeight
+      const ctx = canvas.getContext("2d")!
+      ctx.drawImage(base, 0, 0)
+
+      const logoH = Math.round(canvas.height * 0.09)
+      const logoW = Math.round(logo.naturalWidth * (logoH / logo.naturalHeight))
+      const pad = Math.round(canvas.width * 0.03)
+
+      const isTop = logoPos.startsWith("top")
+      const isFooter = logoPos.startsWith("footer")
+      const side = logoPos.split("-")[1] as "left" | "center" | "right"
+
+      let x = pad
+      const y = isTop ? pad : (isFooter ? canvas.height - logoH - pad : pad)
+
+      if (side === "center") x = (canvas.width - logoW) / 2
+      if (side === "right") x = canvas.width - logoW - pad
+
+      if (isFooter) {
+        ctx.fillStyle = "rgba(0,0,0,0.25)"
+        ctx.fillRect(0, canvas.height - logoH - pad * 2, canvas.width, logoH + pad * 2)
+      }
+
+      ctx.drawImage(logo, x, y, logoW, logoH)
+
+      canvas.toBlob(blob => {
+        if (!blob) return
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `slide-${slideNum}.png`
+        a.click()
+        URL.revokeObjectURL(url)
+      }, "image/png")
+    } catch {
+      // fallback: download without logo
+      const a = document.createElement("a")
+      a.href = imageUrl
+      a.download = `slide-${slideNum}.png`
+      a.target = "_blank"
+      a.click()
+    }
+  }, [identity])
 
   if (loading) return (
     <div className="space-y-4 max-w-4xl">
@@ -155,12 +259,25 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                 </div>
               </div>
             ) : currentSlide?.imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={currentSlide.imageUrl}
-                alt={currentSlide.imagePrompt || "slide"}
-                className="w-full h-full object-cover"
-              />
+              <div className="relative w-full h-full">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={currentSlide.imageUrl}
+                  alt={currentSlide.imagePrompt || "slide"}
+                  className="w-full h-full object-cover"
+                />
+                {identity?.logoUrl && identity.logoPosition !== "none" && (
+                  <div className={cn("absolute flex items-center pointer-events-none", logoOverlayClass(identity.logoPosition))}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={identity.logoUrl}
+                      alt="logo"
+                      className="h-8 object-contain drop-shadow-md"
+                      onError={e => { (e.target as HTMLImageElement).style.display = "none" }}
+                    />
+                  </div>
+                )}
+              </div>
             ) : (
               <div className="text-center space-y-2">
                 <ImageOff className="h-8 w-8 text-muted-foreground mx-auto" />
@@ -199,12 +316,18 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
 
           {/* download */}
           {currentSlide?.imageUrl && !currentSlideGenerating && (
-            <a href={currentSlide.imageUrl} download={`slide-${activeSlide + 1}.png`} target="_blank" rel="noopener noreferrer">
-              <Button variant="outline" size="sm" className="text-xs h-8 w-full gap-2">
-                <Download className="h-3.5 w-3.5" />
-                download slide {activeSlide + 1}
-              </Button>
-            </a>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs h-8 w-full gap-2"
+              onClick={() => downloadSlide(currentSlide.imageUrl!, activeSlide + 1)}
+            >
+              <Download className="h-3.5 w-3.5" />
+              download slide {activeSlide + 1}
+              {identity?.logoUrl && identity.logoPosition !== "none" && (
+                <span className="text-[10px] text-muted-foreground ml-1">+ logo</span>
+              )}
+            </Button>
           )}
         </div>
 

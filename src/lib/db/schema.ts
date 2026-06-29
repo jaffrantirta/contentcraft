@@ -53,6 +53,8 @@ export const identity = pgTable("identity", {
   userId: text("user_id").notNull().unique().references(() => user.id, { onDelete: "cascade" }),
   companyName: text("company_name"),
   logoUrl: text("logo_url"),
+  // top-left | top-center | top-right | footer-left | footer-center | footer-right | none
+  logoPosition: varchar("logo_position", { length: 20 }).notNull().default("none"),
   footerText: text("footer_text"),
   website: text("website"),
   tagline: text("tagline"),

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { post, slide, userSettings } from "@/lib/db/schema"
+import { post, slide, userSettings, identity } from "@/lib/db/schema"
 import { getTokenRouterClient, DEFAULT_CHAT_MODEL } from "@/lib/tokenrouter"
 import { eq } from "drizzle-orm"
 import { v4 as uuidv4 } from "uuid"
@@ -15,7 +15,10 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
 
   const userId = session.user.id
-  const settings = await db.query.userSettings.findFirst({ where: eq(userSettings.userId, userId) })
+  const [settings, identityData] = await Promise.all([
+    db.query.userSettings.findFirst({ where: eq(userSettings.userId, userId) }),
+    db.query.identity.findFirst({ where: eq(identity.userId, userId) }),
+  ])
 
   if (!settings || settings.plan === "free") {
     const used = settings?.freeGenerationsUsed ?? 0
@@ -62,7 +65,9 @@ Return a JSON object with a "slides" key containing an array of exactly ${count}
 - "hashtags": 5 relevant hashtags as a string
 - "imagePrompt": a detailed image generation prompt for this slide
 
-Style: ${vibe}. Color palette: ${colorPalette?.join(", ") || "vibrant"}.${withSubject ? " Include a person/subject in the design." : " No person in the design, focus on objects, text, and abstract visuals."}
+Style: ${vibe}. Color palette: ${colorPalette?.join(", ") || "vibrant"}.${withSubject ? " Include a person/subject in the design." : " No person in the design, focus on objects, text, and abstract visuals."}${identityData?.companyName ? ` Brand: ${identityData.companyName}${identityData.tagline ? ` — ${identityData.tagline}` : ""}.` : ""}
+
+For the imagePrompt field of each slide: create a detailed visual prompt.${identityData?.companyName && identityData?.logoPosition && identityData.logoPosition !== "none" ? ` Reserve a clear area at the ${identityData.logoPosition.replace("-", " ")} of the image for a brand logo. Leave that zone clean and uncluttered so a logo can be overlaid.${identityData.footerText ? ` Also reserve the footer area for text: "${identityData.footerText}".` : ""}` : ""}
 
 Respond ONLY with valid JSON, no markdown, no extra text.`
 

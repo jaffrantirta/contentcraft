@@ -19,20 +19,20 @@ export async function PUT(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
 
   const body = await req.json()
-  const { companyName, logoUrl, footerText, website, tagline } = body
+  const { companyName, logoUrl, logoPosition, footerText, website, tagline } = body
 
   const existing = await db.query.identity.findFirst({ where: eq(identity.userId, session.user.id) })
 
   if (existing) {
     await db.update(identity).set({
-      companyName, logoUrl, footerText, website, tagline,
+      companyName, logoUrl, logoPosition: logoPosition || "none", footerText, website, tagline,
       updatedAt: new Date(),
     }).where(eq(identity.userId, session.user.id))
   } else {
     await db.insert(identity).values({
       id: uuidv4(),
       userId: session.user.id,
-      companyName, logoUrl, footerText, website, tagline,
+      companyName, logoUrl, logoPosition: logoPosition || "none", footerText, website, tagline,
     })
   }
 
