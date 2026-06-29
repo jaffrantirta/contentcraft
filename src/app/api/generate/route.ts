@@ -79,8 +79,8 @@ export async function POST(req: NextRequest) {
     ? ` Leave a clean uncluttered zone at the ${identityData.logoPosition.replace("-", " ")} for a logo overlay.`
     : ""
 
-  // IMPORTANT: image prompts must NEVER contain text/typography — text is overlaid separately
-  const imagePromptRule = `For "imagePrompt": describe ONLY the visual scene/background — colors, shapes, objects, mood, lighting. NO text, NO words, NO typography, NO captions in the image. The caption will be shown as a separate overlay.${logoNote} Style: ${styleHint}. Color palette: ${colorPalette?.join(", ") || "vibrant"}.${withSubject ? " Include a person/subject." : " No people."}${brandNote}`
+  // image prompt describes the visual scene — caption text is injected separately at generation time
+  const imagePromptRule = `For "imagePrompt": describe the visual scene, background, mood, lighting, objects, and composition. Style: ${styleHint}. Color palette: ${colorPalette?.join(", ") || "vibrant"}.${withSubject ? " Include a person/subject." : " No people."}${logoNote}${brandNote} Do NOT write the caption text itself in this field — the caption will be injected into the final image prompt automatically.`
 
   let captionPrompt: string
 

@@ -112,9 +112,18 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
     toast.success("copied to clipboard")
   }
 
-  const downloadSlide = useCallback(async (imageUrl: string, slideNum: number, caption: string | null) => {
+  const downloadSlide = useCallback(async (imageUrl: string, slideNum: number) => {
     const logoUrl = identity?.logoUrl
     const logoPos = identity?.logoPosition ?? "none"
+
+    if (!logoUrl || logoPos === "none") {
+      const a = document.createElement("a")
+      a.href = imageUrl
+      a.download = `slide-${slideNum}.png`
+      a.target = "_blank"
+      a.click()
+      return
+    }
 
     try {
       const proxyUrl = (url: string) =>
@@ -129,9 +138,10 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
           img.src = src
         })
 
-      const toLoad: Promise<HTMLImageElement>[] = [loadImg(proxyUrl(imageUrl))]
-      if (logoUrl && logoPos !== "none") toLoad.push(loadImg(proxyUrl(logoUrl)))
-      const [base, logo] = await Promise.all(toLoad)
+      const [base, logo] = await Promise.all([
+        loadImg(proxyUrl(imageUrl)),
+        loadImg(proxyUrl(logoUrl)),
+      ])
 
       const canvas = document.createElement("canvas")
       canvas.width = base.naturalWidth
@@ -139,68 +149,21 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
       const ctx = canvas.getContext("2d")!
       ctx.drawImage(base, 0, 0)
 
-      // caption text overlay
-      if (caption) {
-        const fontSize = Math.round(canvas.width * 0.045)
-        const pad = Math.round(canvas.width * 0.05)
-        const lineHeight = fontSize * 1.45
-
-        ctx.font = `${fontSize}px system-ui, sans-serif`
-        const maxWidth = canvas.width - pad * 2
-        const words = caption.split(" ")
-        const lines: string[] = []
-        let line = ""
-        for (const word of words) {
-          const test = line ? `${line} ${word}` : word
-          if (ctx.measureText(test).width > maxWidth && line) {
-            lines.push(line)
-            if (lines.length >= 4) break
-            line = word
-          } else {
-            line = test
-          }
-        }
-        if (line && lines.length < 4) lines.push(line)
-
-        const gradH = lines.length * lineHeight + pad * 3
-        const grad = ctx.createLinearGradient(0, canvas.height - gradH, 0, canvas.height)
-        grad.addColorStop(0, "rgba(0,0,0,0)")
-        grad.addColorStop(0.35, "rgba(0,0,0,0.55)")
-        grad.addColorStop(1, "rgba(0,0,0,0.85)")
-        ctx.fillStyle = grad
-        ctx.fillRect(0, canvas.height - gradH, canvas.width, gradH)
-
-        ctx.font = `600 ${fontSize}px system-ui, sans-serif`
-        ctx.fillStyle = "#ffffff"
-        ctx.shadowColor = "rgba(0,0,0,0.6)"
-        ctx.shadowBlur = 10
-        ctx.textAlign = "left"
-        ctx.textBaseline = "bottom"
-        lines.forEach((l, i) => {
-          const y = canvas.height - pad - (lines.length - 1 - i) * lineHeight
-          ctx.fillText(l, pad, y)
-        })
-        ctx.shadowBlur = 0
+      const logoH = Math.round(canvas.height * 0.09)
+      const logoW = Math.round(logo.naturalWidth * (logoH / logo.naturalHeight))
+      const pad = Math.round(canvas.width * 0.03)
+      const isTop = logoPos.startsWith("top")
+      const isFooter = logoPos.startsWith("footer")
+      const side = logoPos.split("-")[1] as "left" | "center" | "right"
+      let x = pad
+      const y = isTop ? pad : canvas.height - logoH - pad
+      if (side === "center") x = (canvas.width - logoW) / 2
+      if (side === "right") x = canvas.width - logoW - pad
+      if (isFooter) {
+        ctx.fillStyle = "rgba(0,0,0,0.25)"
+        ctx.fillRect(0, canvas.height - logoH - pad * 2, canvas.width, logoH + pad * 2)
       }
-
-      // logo overlay
-      if (logo && logoPos !== "none") {
-        const logoH = Math.round(canvas.height * 0.09)
-        const logoW = Math.round(logo.naturalWidth * (logoH / logo.naturalHeight))
-        const pad = Math.round(canvas.width * 0.03)
-        const isTop = logoPos.startsWith("top")
-        const isFooter = logoPos.startsWith("footer")
-        const side = logoPos.split("-")[1] as "left" | "center" | "right"
-        let x = pad
-        const y = isTop ? pad : canvas.height - logoH - pad
-        if (side === "center") x = (canvas.width - logoW) / 2
-        if (side === "right") x = canvas.width - logoW - pad
-        if (isFooter) {
-          ctx.fillStyle = "rgba(0,0,0,0.25)"
-          ctx.fillRect(0, canvas.height - logoH - pad * 2, canvas.width, logoH + pad * 2)
-        }
-        ctx.drawImage(logo, x, y, logoW, logoH)
-      }
+      ctx.drawImage(logo, x, y, logoW, logoH)
 
       canvas.toBlob(blob => {
         if (!blob) return
@@ -337,13 +300,6 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                   alt={currentSlide.imagePrompt || "slide"}
                   className="w-full h-full object-cover"
                 />
-                {currentSlide.caption && (
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/85 via-black/60 to-transparent px-3 pb-3 pt-16 pointer-events-none">
-                    <p className="text-white text-xs font-semibold leading-snug line-clamp-4 drop-shadow">
-                      {currentSlide.caption}
-                    </p>
-                  </div>
-                )}
                 {identity?.logoUrl && identity.logoPosition !== "none" && (
                   <div className={cn("absolute flex items-center pointer-events-none", logoOverlayClass(identity.logoPosition))}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -398,7 +354,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
               variant="outline"
               size="sm"
               className="text-xs h-8 w-full gap-2"
-              onClick={() => downloadSlide(currentSlide.imageUrl!, activeSlide + 1, currentSlide.caption)}
+              onClick={() => downloadSlide(currentSlide.imageUrl!, activeSlide + 1)}
             >
               <Download className="h-3.5 w-3.5" />
               download slide {activeSlide + 1}

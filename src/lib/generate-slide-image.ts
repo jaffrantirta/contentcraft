@@ -9,7 +9,7 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
     with: { post: true },
   })
 
-  if (!slideRow || slideRow.post.userId !== userId || !slideRow.imagePrompt) return null
+  if (!slideRow || slideRow.post.userId !== userId || !slideRow.imagePrompt || !slideRow.caption) return null
 
   const settings = await db.query.userSettings.findFirst({
     where: eq(userSettings.userId, userId),
@@ -32,10 +32,19 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
 
   let imageUrl: string | null = null
 
+  // combine visual description + caption text so AI renders it as part of the design
+  const fullPrompt = `${slideRow.imagePrompt}
+
+Typography overlay: render the following caption as bold, legible text integrated into the design — use a font style that matches the visual aesthetic, with enough contrast to be clearly readable (e.g. white text with subtle shadow on dark areas, or dark text on light areas):
+
+"${slideRow.caption}"
+
+Output: a complete, finished social media slide graphic with the text already on it.`
+
   try {
     const imgRes = await client.images.generate({
       model: imageModel,
-      prompt: slideRow.imagePrompt,
+      prompt: fullPrompt,
       size: imageSize as "1024x1024" | "1024x1536" | "1536x1024",
       n: 1,
     })
