@@ -73,14 +73,11 @@ export async function POST(req: NextRequest) {
   }
   const styleHint = styleKeywords[designStyle || "realistic"] || styleKeywords.realistic
   const brandNote = identityData?.companyName
-    ? ` Brand: ${identityData.companyName}${identityData.tagline ? ` — ${identityData.tagline}` : ""}.`
-    : ""
-  const logoNote = identityData?.companyName && identityData?.logoPosition && identityData.logoPosition !== "none"
-    ? ` Leave a clean uncluttered zone at the ${identityData.logoPosition.replace("-", " ")} for a logo overlay.`
+    ? ` Brand context: ${identityData.companyName}${identityData.tagline ? ` — ${identityData.tagline}` : ""}.`
     : ""
 
-  // image prompt describes the visual scene — caption text is injected separately at generation time
-  const imagePromptRule = `For "imagePrompt": describe the visual scene, background, mood, lighting, objects, and composition. Style: ${styleHint}. Color palette: ${colorPalette?.join(", ") || "vibrant"}.${withSubject ? " Include a person/subject." : " No people."}${logoNote}${brandNote} Do NOT write the caption text itself in this field — the caption will be injected into the final image prompt automatically.`
+  // image prompt describes ONLY the visual scene — caption, footer, and logo zone are injected at generation time
+  const imagePromptRule = `For "imagePrompt": describe the visual scene, background, mood, lighting, objects, and composition only. Style: ${styleHint}. Color palette: ${colorPalette?.join(", ") || "vibrant"}.${withSubject ? " Include a person/subject." : " No people."}${brandNote} Do NOT include caption text, footer text, or logo instructions here — those are added automatically.`
 
   let captionPrompt: string
 

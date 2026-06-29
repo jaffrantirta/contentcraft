@@ -1,5 +1,5 @@
 import { db } from "@/lib/db"
-import { slide, post, userSettings } from "@/lib/db/schema"
+import { slide, post, userSettings, identity } from "@/lib/db/schema"
 import { getTokenRouterClient, DEFAULT_IMAGE_MODEL } from "@/lib/tokenrouter"
 import { eq } from "drizzle-orm"
 
@@ -11,9 +11,10 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
 
   if (!slideRow || slideRow.post.userId !== userId || !slideRow.imagePrompt || !slideRow.caption) return null
 
-  const settings = await db.query.userSettings.findFirst({
-    where: eq(userSettings.userId, userId),
-  })
+  const [settings, identityRow] = await Promise.all([
+    db.query.userSettings.findFirst({ where: eq(userSettings.userId, userId) }),
+    db.query.identity.findFirst({ where: eq(identity.userId, userId) }),
+  ])
 
   const isByok = settings?.plan === "byok" && settings.byokApiKey
   const client = getTokenRouterClient(
@@ -32,14 +33,31 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
 
   let imageUrl: string | null = null
 
-  // combine visual description + caption text so AI renders it as part of the design
-  const fullPrompt = `${slideRow.imagePrompt}
+  // build prompt: visual scene + caption + footer + logo zone
+  let fullPrompt = `${slideRow.imagePrompt}
 
-Typography overlay: render the following caption as bold, legible text integrated into the design — use a font style that matches the visual aesthetic, with enough contrast to be clearly readable (e.g. white text with subtle shadow on dark areas, or dark text on light areas):
+Typography: render the following caption as bold, legible text integrated into the design. Match the font style to the visual aesthetic. Ensure strong contrast (white text on dark backgrounds, dark text on light backgrounds):
 
-"${slideRow.caption}"
+"${slideRow.caption}"`
 
-Output: a complete, finished social media slide graphic with the text already on it.`
+  // footer: burn consistent footer text on every slide
+  if (identityRow?.footerText) {
+    fullPrompt += `
+
+Footer: add a thin footer bar at the very bottom of the image. Inside it, render this text in small, clean typography: "${identityRow.footerText}". Keep it subtle but readable — use a semi-transparent dark or brand-colored strip. This footer must appear on every slide consistently.`
+  }
+
+  // logo zone: if user has a real logo, keep that area blank — CSS overlay will place it
+  if (identityRow?.logoUrl && identityRow.logoPosition && identityRow.logoPosition !== "none") {
+    const zone = identityRow.logoPosition.replace("-", " ") // e.g. "top center"
+    fullPrompt += `
+
+Logo zone: leave the ${zone} area of the image completely empty — no text, no icons, no graphic elements in that zone. A real brand logo image will be placed there as an overlay after generation.`
+  }
+
+  fullPrompt += `
+
+Output: a complete, polished social media slide graphic.`
 
   try {
     const imgRes = await client.images.generate({
