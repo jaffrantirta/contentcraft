@@ -103,7 +103,7 @@ export const post = pgTable("post", {
   withSubject: boolean("with_subject").notNull().default(false),
   vibe: text("vibe").notNull().default("professional"),
   designStyle: varchar("design_style", { length: 30 }).notNull().default("realistic"),
-  captionMode: varchar("caption_mode", { length: 10 }).notNull().default("per_slide"), // per_slide | single
+  captionMode: varchar("caption_mode", { length: 10 }).notNull().default("raw_brief"), // text_ready | raw_brief
   slideBriefs: jsonb("slide_briefs").$type<string[]>().notNull().default([]),
   showFooter: boolean("show_footer").notNull().default(true),
   colorPalette: jsonb("color_palette").$type<string[]>().notNull().default([]),

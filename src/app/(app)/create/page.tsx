@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import { VIBES, COLOR_PALETTES, ASPECT_RATIOS, DESIGN_STYLES } from "@/lib/tokenrouter"
-import { Sparkles, Loader2, User, UserX } from "lucide-react"
+import { Sparkles, Loader2, User, UserX, FileText, Lightbulb } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { GeneratingAnimation } from "@/components/app/generating-animation"
 
@@ -20,11 +20,11 @@ type StyleId = typeof DESIGN_STYLES[number]["id"]
 interface FormState {
   brief: string
   slideBriefs: string[]
+  inputMode: "text_ready" | "raw_brief"
   aspectRatio: AspectRatioId
   language: "id" | "en"
   slideCount: number
   withSubject: boolean
-  captionMode: "per_slide" | "single" | "none"
   showFooter: boolean
   vibe: VibeId
   designStyle: StyleId
@@ -37,11 +37,11 @@ export default function CreatePage() {
   const [form, setForm] = useState<FormState>({
     brief: "",
     slideBriefs: ["", "", ""],
+    inputMode: "raw_brief",
     aspectRatio: "1:1",
     language: "id",
     slideCount: 3,
     withSubject: false,
-    captionMode: "per_slide",
     showFooter: true,
     vibe: "professional",
     designStyle: "realistic",
@@ -73,6 +73,13 @@ export default function CreatePage() {
       toast.error("please write a general brief first")
       return
     }
+    if (form.inputMode === "text_ready") {
+      const missing = form.slideBriefs.slice(0, form.slideCount).some(b => !b.trim())
+      if (missing) {
+        toast.error("fill in the text for every slide")
+        return
+      }
+    }
     setLoading(true)
     try {
       const selectedPalette = COLOR_PALETTES.find(p => p.id === form.colorPalette)
@@ -80,7 +87,16 @@ export default function CreatePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...form,
+          brief: form.brief,
+          slideBriefs: form.slideBriefs,
+          captionMode: form.inputMode,
+          aspectRatio: form.aspectRatio,
+          language: form.language,
+          slideCount: form.slideCount,
+          withSubject: form.withSubject,
+          showFooter: form.showFooter,
+          vibe: form.vibe,
+          designStyle: form.designStyle,
           colorPalette: selectedPalette?.colors || [],
         }),
       })
@@ -103,6 +119,8 @@ export default function CreatePage() {
     }
   }
 
+  const isTextReady = form.inputMode === "text_ready"
+
   return (
     <>
     {loading && <GeneratingAnimation slideCount={form.slideCount} />}
@@ -112,10 +130,53 @@ export default function CreatePage() {
         <p className="text-sm text-muted-foreground mt-1">fill in the details and let ai do the work</p>
       </div>
 
+      {/* input mode — first choice */}
+      <div className="space-y-3">
+        <Label className="text-xs font-medium">content mode</Label>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => set("inputMode", "raw_brief")}
+            className={cn(
+              "p-4 rounded-lg border text-left transition-colors",
+              !isTextReady
+                ? "border-primary bg-primary/5"
+                : "border-border/60 hover:border-border bg-card"
+            )}
+          >
+            <Lightbulb className="h-4 w-4 mb-2 text-muted-foreground" />
+            <p className="text-xs font-semibold">raw brief</p>
+            <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed">
+              describe what each slide is about — ai writes the text and burns it into the design
+            </p>
+          </button>
+          <button
+            onClick={() => set("inputMode", "text_ready")}
+            className={cn(
+              "p-4 rounded-lg border text-left transition-colors",
+              isTextReady
+                ? "border-primary bg-primary/5"
+                : "border-border/60 hover:border-border bg-card"
+            )}
+          >
+            <FileText className="h-4 w-4 mb-2 text-muted-foreground" />
+            <p className="text-xs font-semibold">text ready</p>
+            <p className="text-[10px] text-muted-foreground mt-1 leading-relaxed">
+              write the exact text for each slide — ai only designs the visual around your words
+            </p>
+          </button>
+        </div>
+      </div>
+
+      <Separator />
+
       {/* general brief */}
       <div className="space-y-2">
         <Label className="text-xs font-medium">general brief *</Label>
-        <p className="text-[10px] text-muted-foreground">overall topic, brand, and design direction</p>
+        <p className="text-[10px] text-muted-foreground">
+          {isTextReady
+            ? "overall topic, brand, and design direction (ai uses this for visual style)"
+            : "overall topic, brand, and design direction"}
+        </p>
         <Textarea
           placeholder="what is this content about? describe your message, product, or topic..."
           className="min-h-24 text-sm resize-none"
@@ -194,18 +255,30 @@ export default function CreatePage() {
         </div>
       </div>
 
-      {/* per-slide briefs */}
+      {/* per-slide content */}
       <div className="space-y-3">
         <div>
-          <Label className="text-xs font-medium">slide content</Label>
-          <p className="text-[10px] text-muted-foreground mt-0.5">describe what each slide should say or show</p>
+          <Label className="text-xs font-medium">
+            {isTextReady ? "slide text (exact)" : "slide briefs"}
+          </Label>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
+            {isTextReady
+              ? "write the exact text that will appear on each slide"
+              : "describe what each slide should be about — ai writes the text"}
+          </p>
         </div>
         <div className="space-y-3">
-          {form.slideBriefs.map((brief, i) => (
+          {form.slideBriefs.slice(0, form.slideCount).map((brief, i) => (
             <div key={i} className="space-y-1.5">
-              <p className="text-[10px] font-medium text-muted-foreground">slide {i + 1}</p>
+              <p className="text-[10px] font-medium text-muted-foreground">
+                slide {i + 1}{isTextReady ? " *" : ""}
+              </p>
               <Textarea
-                placeholder={`what should slide ${i + 1} be about?`}
+                placeholder={
+                  isTextReady
+                    ? `exact text for slide ${i + 1}...`
+                    : `what should slide ${i + 1} be about?`
+                }
                 className="min-h-16 text-sm resize-none"
                 value={brief}
                 onChange={e => setSlideBrief(i, e.target.value)}
@@ -243,49 +316,6 @@ export default function CreatePage() {
           >
             <User className="h-3.5 w-3.5" />
             with subject
-          </button>
-        </div>
-      </div>
-
-      {/* caption mode */}
-      <div className="space-y-3">
-        <Label className="text-xs font-medium">caption mode</Label>
-        <div className="grid grid-cols-3 gap-2">
-          <button
-            onClick={() => set("captionMode", "per_slide")}
-            className={cn(
-              "p-3 rounded-lg border text-left transition-colors",
-              form.captionMode === "per_slide"
-                ? "border-primary bg-primary/5"
-                : "border-border/60 hover:border-border bg-card"
-            )}
-          >
-            <p className="text-xs font-medium">per slide</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">text burned into each image</p>
-          </button>
-          <button
-            onClick={() => set("captionMode", "single")}
-            className={cn(
-              "p-3 rounded-lg border text-left transition-colors",
-              form.captionMode === "single"
-                ? "border-primary bg-primary/5"
-                : "border-border/60 hover:border-border bg-card"
-            )}
-          >
-            <p className="text-xs font-medium">single</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">one post caption, clean images</p>
-          </button>
-          <button
-            onClick={() => set("captionMode", "none")}
-            className={cn(
-              "p-3 rounded-lg border text-left transition-colors",
-              form.captionMode === "none"
-                ? "border-primary bg-primary/5"
-                : "border-border/60 hover:border-border bg-card"
-            )}
-          >
-            <p className="text-xs font-medium">none</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">no caption, pure visuals</p>
           </button>
         </div>
       </div>
@@ -398,7 +428,7 @@ export default function CreatePage() {
       {/* generate — sticky on mobile, inline on desktop */}
       <div className="hidden md:flex items-center justify-between pb-8">
         <p className="text-xs text-muted-foreground">
-          {form.slideCount} slide{form.slideCount > 1 ? "s" : ""} · {form.language === "id" ? "indonesian" : "english"} · {form.vibe}
+          {form.slideCount} slide{form.slideCount > 1 ? "s" : ""} · {form.language === "id" ? "indonesian" : "english"} · {form.inputMode === "text_ready" ? "text ready" : "raw brief"}
         </p>
         <Button onClick={handleGenerate} disabled={loading || !form.brief.trim()} size="lg" className="text-sm min-w-36">
           {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />generating...</> : <><Sparkles className="h-4 w-4 mr-2" />generate</>}
@@ -409,7 +439,7 @@ export default function CreatePage() {
       <div className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-background/95 backdrop-blur-sm border-t border-border/60 p-4">
         <div className="flex items-center gap-3">
           <p className="text-[10px] text-muted-foreground flex-1">
-            {form.slideCount} slides · {form.language} · {form.vibe}
+            {form.slideCount} slides · {form.language} · {form.inputMode === "text_ready" ? "text ready" : "raw brief"}
           </p>
           <Button onClick={handleGenerate} disabled={loading || !form.brief.trim()} className="text-sm h-10 px-6">
             {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />generating...</> : <><Sparkles className="h-4 w-4 mr-2" />generate</>}

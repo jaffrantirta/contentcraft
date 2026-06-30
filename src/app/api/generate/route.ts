@@ -8,7 +8,6 @@ import { eq } from "drizzle-orm"
 import { v4 as uuidv4 } from "uuid"
 import { headers } from "next/headers"
 
-// captions (~30s) + background image generation via after()
 export const maxDuration = 300
 
 export async function POST(req: NextRequest) {
@@ -29,10 +28,24 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { brief, slideBriefs, aspectRatio, language, slideCount, withSubject, vibe, designStyle, colorPalette, captionMode, showFooter } = body
+  const {
+    brief,
+    slideBriefs,
+    aspectRatio,
+    language,
+    slideCount,
+    withSubject,
+    vibe,
+    designStyle,
+    colorPalette,
+    captionMode, // "text_ready" | "raw_brief"
+    showFooter,
+  } = body
+
   if (!brief) return NextResponse.json({ error: "brief is required" }, { status: 400 })
 
   const count = Math.min(Math.max(1, Number(slideCount) || 3), settings?.plan === "free" ? 5 : 10)
+  const inputMode: "text_ready" | "raw_brief" = captionMode === "text_ready" ? "text_ready" : "raw_brief"
 
   const isByok = settings?.plan === "byok" && settings.byokApiKey
   const client = getTokenRouterClient(isByok
@@ -52,7 +65,7 @@ export async function POST(req: NextRequest) {
     withSubject: !!withSubject,
     vibe: vibe || "professional",
     designStyle: designStyle || "realistic",
-    captionMode: captionMode || "per_slide",
+    captionMode: inputMode,
     slideBriefs: Array.isArray(slideBriefs) ? slideBriefs : [],
     showFooter: showFooter !== false,
     colorPalette: colorPalette || [],
@@ -60,14 +73,6 @@ export async function POST(req: NextRequest) {
   })
 
   const lang = language === "en" ? "English" : "Indonesian"
-  const effectiveCaptionMode = captionMode || "per_slide"
-  const isSingleCaption = effectiveCaptionMode === "single"
-  const isNoCaption = effectiveCaptionMode === "none"
-  const hasPrewrittenSlides = /SLIDE\s*\d+/i.test(brief)
-  const hasPerSlideBriefs = Array.isArray(slideBriefs) && slideBriefs.some((s: string) => s?.trim())
-  const perSlideLines = hasPerSlideBriefs
-    ? slideBriefs.slice(0, count).map((b: string, i: number) => `Slide ${i + 1}: ${b?.trim() || "(see general brief)"}`)
-    : []
 
   const styleKeywords: Record<string, string> = {
     realistic:    "photorealistic DSLR photo, sharp focus, natural lighting",
@@ -84,75 +89,7 @@ export async function POST(req: NextRequest) {
     ? ` Brand context: ${identityData.companyName}${identityData.tagline ? ` — ${identityData.tagline}` : ""}.`
     : ""
 
-  // imagePrompt describes the visual concept — the caption text is injected separately when calling the image model
-  const imagePromptRule = `For "imagePrompt": describe the visual concept, scene, mood, lighting, composition, and objects that match this slide's content. Style: ${styleHint}. Color palette: ${colorPalette?.join(", ") || "vibrant"}.${withSubject ? " Include a person/subject." : " No people."}${brandNote} Do NOT include the caption text itself here — just the visual design concept.`
-
-  let captionPrompt: string
-
-  if (isNoCaption) {
-    // no caption at all — only need image prompts per slide
-    captionPrompt = "" // handled via parallel path below
-
-  } else if (isSingleCaption) {
-    const slidePart = hasPerSlideBriefs
-      ? `Each slide has a specific visual topic:\n${perSlideLines.join("\n")}\n\nGeneral context: ${brief}`
-      : `Brief: ${brief}`
-    captionPrompt = `You are a social media content writer. Create one shared caption for a ${count}-slide carousel, plus a unique image prompt per slide.
-
-${slidePart}
-Language: ${lang}
-Vibe: ${vibe}
-
-Return a JSON object with a "slides" key — array of exactly ${count} objects. ALL slides share the same caption and hashtags but each has a UNIQUE imagePrompt based on its slide topic.
-- "caption": ONE engaging caption (3-5 sentences) in ${lang} — same for all slides
-- "hashtags": 5 hashtags — same for all slides
-- "imagePrompt": unique visual scene for this slide's specific topic
-
-${imagePromptRule}
-
-Respond ONLY with valid JSON, no markdown, no extra text.`
-
-  } else if (hasPrewrittenSlides) {
-    captionPrompt = `You are a social media content assistant. The user has pre-written text for each slide. Extract each slide's text exactly and create image prompts.
-
-Brief:
-${brief}
-
-Language: ${lang}
-Vibe: ${vibe}
-
-Return a JSON object with a "slides" key — array of exactly ${count} objects:
-- "caption": EXACT text from that slide. Preserve emojis, bullets, line breaks. Do NOT rewrite.
-- "hashtags": 5 relevant hashtags
-- "imagePrompt": visual scene for this slide
-
-${imagePromptRule}
-
-Respond ONLY with valid JSON, no markdown, no extra text.`
-
-  } else if (hasPerSlideBriefs) {
-    // parallel path — captionPrompt unused, handled below
-    captionPrompt = ""
-
-  } else {
-    captionPrompt = `You are a social media content writer. Create ${count} slide captions for a carousel post.
-
-Brief: ${brief}
-Language: ${lang}
-Vibe: ${vibe}
-Slide count: ${count}
-
-Make each slide cover a different angle or point. Do NOT repeat the same message across slides.
-
-Return a JSON object with a "slides" key — array of exactly ${count} objects:
-- "caption": caption for this slide in ${lang} (2-4 sentences)
-- "hashtags": 5 relevant hashtags
-- "imagePrompt": visual scene for this slide
-
-${imagePromptRule}
-
-Respond ONLY with valid JSON, no markdown, no extra text.`
-  }
+  const imagePromptRule = `For "imagePrompt": describe the visual concept, scene, mood, lighting, composition, and objects. Style: ${styleHint}. Color palette: ${colorPalette?.join(", ") || "vibrant"}.${withSubject ? " Include a person/subject." : " No people."}${brandNote} Do NOT include any text or words here — only the visual scene.`
 
   function cleanRaw(s: string): string {
     return s
@@ -161,8 +98,6 @@ Respond ONLY with valid JSON, no markdown, no extra text.`
       .replace(/\n?```$/im, "")
       .trim()
   }
-
-  let slidesData: Array<{ caption: string; hashtags: string; imagePrompt: string }> = []
 
   async function callChat(prompt: string): Promise<string> {
     try {
@@ -181,55 +116,68 @@ Respond ONLY with valid JSON, no markdown, no extra text.`
     }
   }
 
-  try {
-    if (isNoCaption) {
-      // no captions — generate only imagePrompts, one call per slide in parallel
-      console.log(`[generate] no-caption mode: generating ${count} image prompts`)
-      const briefs = hasPerSlideBriefs
-        ? slideBriefs.slice(0, count)
-        : Array.from({ length: count }, () => brief)
-      slidesData = await Promise.all(
-        briefs.map(async (slideBrief: string, i: number) => {
-          const slidePrompt = `Describe a visual scene for a social media slide image.
+  let slidesData: Array<{ caption: string; hashtags: string; imagePrompt: string }> = []
 
-Topic: ${slideBrief?.trim() || brief}
-Context: ${brief}
+  try {
+    if (inputMode === "text_ready") {
+      // User wrote the exact text — only generate imagePrompts, one call per slide
+      console.log(`[generate] text_ready mode: ${count} slides, generating image prompts only`)
+      const briefs = Array.isArray(slideBriefs) ? slideBriefs.slice(0, count) : []
+
+      slidesData = await Promise.all(
+        Array.from({ length: count }, async (_, i) => {
+          const slideText = briefs[i]?.trim() || ""
+          const prompt = `You are a visual designer. Create an image concept for a social media slide.
+
+The slide already has this exact text: "${slideText}"
+Overall context: ${brief}
 Vibe: ${vibe}
+Language of text: ${lang}
 
 Return a JSON object with only:
-- "imagePrompt": visual scene description (background, mood, colors, composition)
+- "imagePrompt": visual scene description for the background and design — mood, colors, composition, objects. The text will be overlaid on this design.
+- "hashtags": 5 relevant hashtags as a string
 
 ${imagePromptRule}
 
 Respond ONLY with valid JSON.`
-          const raw = await callChat(slidePrompt)
+
+          const raw = await callChat(prompt)
           const parsed = JSON.parse(raw)
-          return { caption: "", hashtags: "", imagePrompt: parsed.imagePrompt || "" }
+          return {
+            caption: slideText,
+            hashtags: parsed.hashtags || "",
+            imagePrompt: parsed.imagePrompt || "",
+          }
         })
       )
-      console.log(`[generate] no-caption image prompts done: ${slidesData.length}`)
+      console.log(`[generate] text_ready prompts done: ${slidesData.length} slides`)
 
-    } else if (hasPerSlideBriefs) {
-      // one AI call per slide in parallel — each only sees its own brief, no chance to repeat
-      console.log(`[generate] parallel per-slide generation: ${count} slides`)
+    } else {
+      // raw_brief — AI writes caption + imagePrompt for each slide from the brief
+      console.log(`[generate] raw_brief mode: ${count} slides, generating content in parallel`)
+      const briefs = Array.isArray(slideBriefs) ? slideBriefs.slice(0, count) : []
+
       slidesData = await Promise.all(
-        slideBriefs.slice(0, count).map(async (slideBrief: string, i: number) => {
-          const slidePrompt = `You are a social media content writer. Write content for slide ${i + 1} of a carousel post.
+        Array.from({ length: count }, async (_, i) => {
+          const slideBrief = briefs[i]?.trim() || brief
+          const prompt = `You are a social media content writer. Write content for slide ${i + 1} of a ${count}-slide carousel.
 
-This slide's topic: ${slideBrief?.trim() || brief}
+This slide's topic: ${slideBrief}
 General context: ${brief}
 Language: ${lang}
 Vibe: ${vibe}
 
 Return a JSON object with exactly:
-- "caption": caption in ${lang} for this slide's specific topic (2-4 sentences)
+- "caption": the text that will appear on this slide in ${lang} (2-4 short sentences, punchy and readable)
 - "hashtags": 5 relevant hashtags as a string
-- "imagePrompt": visual scene for this slide's topic
+- "imagePrompt": visual concept for this slide
 
 ${imagePromptRule}
 
 Respond ONLY with valid JSON.`
-          const raw = await callChat(slidePrompt)
+
+          const raw = await callChat(prompt)
           const parsed = JSON.parse(raw)
           return {
             caption: parsed.caption || "",
@@ -238,24 +186,13 @@ Respond ONLY with valid JSON.`
           }
         })
       )
-      console.log(`[generate] parallel generation done: ${slidesData.length} slides`)
-
-    } else {
-      let raw = "{}"
-      console.log(`[generate] calling chat model: ${chatModel}`)
-      raw = await callChat(captionPrompt)
-      console.log("[generate] raw response length:", raw.length, "| preview:", raw.slice(0, 120))
-      const parsed = JSON.parse(raw)
-      slidesData = Array.isArray(parsed)
-        ? parsed
-        : parsed.slides || parsed.data || parsed.captions || (Object.values(parsed)[0] as typeof slidesData) || []
-      console.log("[generate] parsed slides:", slidesData.length)
+      console.log(`[generate] raw_brief generation done: ${slidesData.length} slides`)
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
-    console.error("[generate] caption generation failed:", msg)
-    await db.update(post).set({ status: "error", errorMessage: `caption failed: ${msg}` }).where(eq(post.id, postId))
-    return NextResponse.json({ error: "caption generation failed", detail: msg }, { status: 500 })
+    console.error("[generate] generation failed:", msg)
+    await db.update(post).set({ status: "error", errorMessage: `generation failed: ${msg}` }).where(eq(post.id, postId))
+    return NextResponse.json({ error: "generation failed", detail: msg }, { status: 500 })
   }
 
   if (!slidesData.length) {
@@ -263,7 +200,6 @@ Respond ONLY with valid JSON.`
     return NextResponse.json({ error: "no slides data returned" }, { status: 500 })
   }
 
-  // insert slides with captions + prompts — imageUrl generated separately per slide
   const slideRecords = await Promise.all(
     slidesData.slice(0, count).map(async (s, i) => {
       const slideId = uuidv4()
@@ -290,17 +226,16 @@ Respond ONLY with valid JSON.`
     }
   }
 
-  // fire image generation in background — response is sent first, window can be closed
   after(async () => {
-    console.log(`[generate] background image generation started for post ${postId} (${slideRecords.length} slides)`)
+    console.log(`[generate] background image generation for post ${postId} (${slideRecords.length} slides)`)
     await Promise.all(
       slideRecords.map(s =>
         generateSlideImage(s.id, userId).catch(err =>
-          console.error(`[generate] background image failed for slide ${s.id}:`, err)
+          console.error(`[generate] image failed for slide ${s.id}:`, err)
         )
       )
     )
-    console.log(`[generate] background image generation done for post ${postId}`)
+    console.log(`[generate] image generation done for post ${postId}`)
   })
 
   return NextResponse.json({ postId, slides: slideRecords })

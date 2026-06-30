@@ -30,7 +30,7 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
   }
   const imageSize = sizeMap[slideRow.post.aspectRatio] || "1024x1024"
 
-  const captionMode = slideRow.post.captionMode ?? "per_slide"
+  const hasCaption = !!slideRow.caption?.trim()
   const showFooter = identityRow?.footerText && slideRow.post.showFooter !== false
   const logoZone = (identityRow?.logoUrl && identityRow.logoPosition && identityRow.logoPosition !== "none")
     ? `Leave the ${identityRow.logoPosition.replace("-", " ")} corner completely empty — a brand logo will be placed there.`
@@ -38,24 +38,24 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
 
   let fullPrompt: string
 
-  if (captionMode === "per_slide" && slideRow.caption) {
-    // Thumbai image-gen style: frame as complete slide, text included naturally as content
+  if (hasCaption) {
+    // Both text_ready and raw_brief: burn the text into the design
     const parts = [
       "Create a complete, professional social media carousel slide graphic.",
       `Slide text (must appear clearly and prominently in the design): "${slideRow.caption}"`,
       `Visual concept: ${slideRow.imagePrompt}`,
       showFooter ? `Include a footer strip at the very bottom with this small text: "${identityRow!.footerText}"` : "",
       logoZone,
-      "Bold readable typography integrated naturally into the design. High quality, eye-catching, Instagram-ready.",
+      "Bold, readable typography integrated naturally into the design. High quality, eye-catching, Instagram-ready.",
     ]
     fullPrompt = parts.filter(Boolean).join(" ")
   } else {
-    // single / none — clean visual, no text (text handled client-side or not at all)
+    // No caption — pure visual
     const parts = [
       slideRow.imagePrompt,
       showFooter ? `Include a footer strip at the very bottom with this small text: "${identityRow!.footerText}"` : "",
       logoZone,
-      "No other text or words in the image.",
+      "No text or words in the image.",
     ]
     fullPrompt = parts.filter(Boolean).join(" ")
   }
