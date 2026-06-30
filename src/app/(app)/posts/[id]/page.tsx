@@ -355,28 +355,6 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                   className="w-full h-full object-cover"
                 />
 
-                {/* caption overlay — per_slide mode only */}
-                {post.captionMode === "per_slide" && currentSlide.caption && (
-                  <div className="absolute inset-x-0 bottom-0 pointer-events-none"
-                    style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.6) 50%, transparent 100%)", padding: "10% 5% 5%" }}>
-                    <p className="text-white font-bold leading-snug drop-shadow-lg"
-                      style={{ fontSize: "clamp(10px, 3.5cqw, 18px)", lineClamp: "5", display: "-webkit-box", WebkitLineClamp: 5, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
-                      {currentSlide.caption}
-                    </p>
-                  </div>
-                )}
-
-                {/* footer bar */}
-                {identity?.footerText && post.showFooter && (
-                  <div className="absolute inset-x-0 bottom-0 pointer-events-none flex items-center justify-center"
-                    style={{ background: "rgba(0,0,0,0.55)", padding: "2% 4%" }}>
-                    <p className="text-white/85 text-center leading-none"
-                      style={{ fontSize: "clamp(8px, 2cqw, 13px)" }}>
-                      {identity.footerText}
-                    </p>
-                  </div>
-                )}
-
                 {/* logo overlay */}
                 {identity?.logoUrl && identity.logoPosition !== "none" && (
                   <div className={cn("absolute flex items-center pointer-events-none", logoOverlayClass(identity.logoPosition))}>

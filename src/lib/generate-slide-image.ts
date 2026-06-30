@@ -22,7 +22,6 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
   )
   const imageModel = isByok && settings?.byokModel ? settings.byokModel : DEFAULT_IMAGE_MODEL
 
-  // map stored aspect ratio to image API size
   const sizeMap: Record<string, string> = {
     "1:1":  "1024x1024",
     "4:5":  "1024x1536",
@@ -31,18 +30,37 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
   }
   const imageSize = sizeMap[slideRow.post.aspectRatio] || "1024x1024"
 
-  let imageUrl: string | null = null
+  const captionMode = slideRow.post.captionMode ?? "per_slide"
+  const showFooter = identityRow?.footerText && slideRow.post.showFooter !== false
+  const logoZone = (identityRow?.logoUrl && identityRow.logoPosition && identityRow.logoPosition !== "none")
+    ? `Leave the ${identityRow.logoPosition.replace("-", " ")} corner completely empty — a brand logo will be placed there.`
+    : ""
 
-  // pure visual background — all text/branding overlaid client-side for consistency
-  let fullPrompt = slideRow.imagePrompt
+  let fullPrompt: string
 
-  // reserve blank space where real logo overlay will sit
-  if (identityRow?.logoUrl && identityRow.logoPosition && identityRow.logoPosition !== "none") {
-    const zone = identityRow.logoPosition.replace("-", " ")
-    fullPrompt += ` Leave the ${zone} area completely empty — no elements there.`
+  if (captionMode === "per_slide" && slideRow.caption) {
+    // Thumbai image-gen style: frame as complete slide, text included naturally as content
+    const parts = [
+      "Create a complete, professional social media carousel slide graphic.",
+      `Slide text (must appear clearly and prominently in the design): "${slideRow.caption}"`,
+      `Visual concept: ${slideRow.imagePrompt}`,
+      showFooter ? `Include a footer strip at the very bottom with this small text: "${identityRow!.footerText}"` : "",
+      logoZone,
+      "Bold readable typography integrated naturally into the design. High quality, eye-catching, Instagram-ready.",
+    ]
+    fullPrompt = parts.filter(Boolean).join(" ")
+  } else {
+    // single / none — clean visual, no text (text handled client-side or not at all)
+    const parts = [
+      slideRow.imagePrompt,
+      showFooter ? `Include a footer strip at the very bottom with this small text: "${identityRow!.footerText}"` : "",
+      logoZone,
+      "No other text or words in the image.",
+    ]
+    fullPrompt = parts.filter(Boolean).join(" ")
   }
 
-  fullPrompt += ` Generate a clean background image with NO text, NO words, NO typography anywhere. Pure visual only.`
+  let imageUrl: string | null = null
 
   try {
     const imgRes = await client.images.generate({
@@ -61,7 +79,6 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
 
   await db.update(slide).set({ imageUrl }).where(eq(slide.id, slideId))
 
-  // mark post done if all slides now have images
   const allSlides = await db.query.slide.findMany({ where: eq(slide.postId, slideRow.postId) })
   const allDone = allSlides.every(s => s.id === slideId ? true : s.imageUrl !== null)
   if (allDone) {
