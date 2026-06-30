@@ -10,10 +10,9 @@ export async function GET() {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
 
-  const result = await db.query.userSettings.findFirst({ where: eq(userSettings.userId, session.user.id) })
+  const [result] = await db.select().from(userSettings).where(eq(userSettings.userId, session.user.id)).limit(1)
   if (!result) return NextResponse.json({ plan: "free", freeGenerationsUsed: 0, byokApiKey: null, byokBaseUrl: null, byokModel: null, byokChatModel: null })
 
-  // mask api key
   return NextResponse.json({
     ...result,
     byokApiKey: result.byokApiKey ? `${result.byokApiKey.slice(0, 8)}...` : null,
@@ -27,7 +26,7 @@ export async function PUT(req: NextRequest) {
   const body = await req.json()
   const { byokApiKey, byokBaseUrl, byokModel, byokChatModel } = body
 
-  const existing = await db.query.userSettings.findFirst({ where: eq(userSettings.userId, session.user.id) })
+  const [existing] = await db.select().from(userSettings).where(eq(userSettings.userId, session.user.id)).limit(1)
 
   const plan = byokApiKey ? "byok" : (existing?.plan === "pro" ? "pro" : "free")
 

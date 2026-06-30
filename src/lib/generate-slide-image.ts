@@ -1,20 +1,27 @@
 import { db } from "@/lib/db"
 import { slide, post, userSettings, identity } from "@/lib/db/schema"
 import { getTokenRouterClient, DEFAULT_IMAGE_MODEL } from "@/lib/tokenrouter"
-import { eq } from "drizzle-orm"
+import { eq, asc } from "drizzle-orm"
 
 export async function generateSlideImage(slideId: string, userId: string): Promise<string | null> {
-  const slideRow = await db.query.slide.findFirst({
-    where: eq(slide.id, slideId),
-    with: { post: true },
-  })
-
-  if (!slideRow || slideRow.post.userId !== userId || !slideRow.imagePrompt) return null
-
-  const [settings, identityRow] = await Promise.all([
-    db.query.userSettings.findFirst({ where: eq(userSettings.userId, userId) }),
-    db.query.identity.findFirst({ where: eq(identity.userId, userId) }),
+  const [slideRows] = await Promise.all([
+    db.select().from(slide).where(eq(slide.id, slideId)).limit(1),
   ])
+  const slideRow = slideRows[0]
+  if (!slideRow) return null
+
+  const [postRows] = await Promise.all([
+    db.select().from(post).where(eq(post.id, slideRow.postId)).limit(1),
+  ])
+  const postRow = postRows[0]
+  if (!postRow || postRow.userId !== userId || !slideRow.imagePrompt) return null
+
+  const [settingsRows, identityRows] = await Promise.all([
+    db.select().from(userSettings).where(eq(userSettings.userId, userId)).limit(1),
+    db.select().from(identity).where(eq(identity.userId, userId)).limit(1),
+  ])
+  const settings = settingsRows[0]
+  const identityRow = identityRows[0]
 
   const isByok = settings?.plan === "byok" && settings.byokApiKey
   const client = getTokenRouterClient(
@@ -28,10 +35,10 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
     "9:16": "1024x1536",
     "16:9": "1536x1024",
   }
-  const imageSize = sizeMap[slideRow.post.aspectRatio] || "1024x1024"
+  const imageSize = sizeMap[postRow.aspectRatio] || "1024x1024"
 
   const hasCaption = !!slideRow.caption?.trim()
-  const showFooter = identityRow?.footerText && slideRow.post.showFooter !== false
+  const showFooter = identityRow?.footerText && postRow.showFooter !== false
   const logoZone = (identityRow?.logoUrl && identityRow.logoPosition && identityRow.logoPosition !== "none")
     ? `Leave the ${identityRow.logoPosition.replace("-", " ")} corner completely empty — a brand logo will be placed there.`
     : ""
@@ -39,7 +46,6 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
   let fullPrompt: string
 
   if (hasCaption) {
-    // Both text_ready and raw_brief: burn the text into the design
     const parts = [
       "Create a complete, professional social media carousel slide graphic.",
       `Slide text (must appear clearly and prominently in the design): "${slideRow.caption}"`,
@@ -50,7 +56,6 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
     ]
     fullPrompt = parts.filter(Boolean).join(" ")
   } else {
-    // No caption — pure visual
     const parts = [
       slideRow.imagePrompt,
       showFooter ? `Include a footer strip at the very bottom with this small text: "${identityRow!.footerText}"` : "",
@@ -79,7 +84,7 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
 
   await db.update(slide).set({ imageUrl }).where(eq(slide.id, slideId))
 
-  const allSlides = await db.query.slide.findMany({ where: eq(slide.postId, slideRow.postId) })
+  const allSlides = await db.select().from(slide).where(eq(slide.postId, slideRow.postId)).orderBy(asc(slide.order))
   const allDone = allSlides.every(s => s.id === slideId ? true : s.imageUrl !== null)
   if (allDone) {
     await db.update(post).set({ status: "done" }).where(eq(post.id, slideRow.postId))

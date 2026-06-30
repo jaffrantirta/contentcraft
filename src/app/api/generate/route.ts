@@ -16,11 +16,14 @@ export async function POST(req: NextRequest) {
 
   const userId = session.user.id
 
-  const settings = await db.query.userSettings.findFirst({ where: eq(userSettings.userId, userId) })
-    .catch((err: unknown) => { console.error("[generate] userSettings query failed:", err); return undefined })
-
-  const identityData = await db.query.identity.findFirst({ where: eq(identity.userId, userId) })
-    .catch((err: unknown) => { console.error("[generate] identity query failed:", err); return undefined })
+  const [settingsRows, identityRows] = await Promise.all([
+    db.select().from(userSettings).where(eq(userSettings.userId, userId)).limit(1)
+      .catch((err: unknown) => { console.error("[generate] userSettings query failed:", err); return [] }),
+    db.select().from(identity).where(eq(identity.userId, userId)).limit(1)
+      .catch((err: unknown) => { console.error("[generate] identity query failed:", err); return [] }),
+  ])
+  const settings = settingsRows[0]
+  const identityData = identityRows[0]
 
   if (!settings || settings.plan === "free") {
     const used = settings?.freeGenerationsUsed ?? 0

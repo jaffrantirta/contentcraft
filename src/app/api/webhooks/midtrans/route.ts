@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     const transactionStatus: string = statusResponse.transaction_status
     const fraudStatus: string = statusResponse.fraud_status
 
-    const sub = await db.query.subscription.findFirst({ where: eq(subscription.midtransOrderId, orderId) })
+    const [sub] = await db.select().from(subscription).where(eq(subscription.midtransOrderId, orderId)).limit(1)
     if (!sub) return NextResponse.json({ error: "subscription not found" }, { status: 404 })
 
     let newStatus = sub.status
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     }).where(eq(subscription.midtransOrderId, orderId))
 
     if (newStatus === "active") {
-      const existing = await db.query.userSettings.findFirst({ where: eq(userSettings.userId, sub.userId) })
+      const [existing] = await db.select().from(userSettings).where(eq(userSettings.userId, sub.userId)).limit(1)
       if (existing) {
         await db.update(userSettings).set({ plan: "pro", updatedAt: now }).where(eq(userSettings.userId, sub.userId))
       } else {

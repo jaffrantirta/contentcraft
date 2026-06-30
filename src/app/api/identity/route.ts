@@ -10,7 +10,7 @@ export async function GET() {
   const session = await auth.api.getSession({ headers: await headers() })
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
 
-  const result = await db.query.identity.findFirst({ where: eq(identity.userId, session.user.id) })
+  const [result] = await db.select().from(identity).where(eq(identity.userId, session.user.id)).limit(1)
   return NextResponse.json(result || null)
 }
 
@@ -21,7 +21,7 @@ export async function PUT(req: NextRequest) {
   const body = await req.json()
   const { companyName, logoUrl, logoPosition, footerText, website, tagline } = body
 
-  const existing = await db.query.identity.findFirst({ where: eq(identity.userId, session.user.id) })
+  const [existing] = await db.select().from(identity).where(eq(identity.userId, session.user.id)).limit(1)
 
   if (existing) {
     await db.update(identity).set({
