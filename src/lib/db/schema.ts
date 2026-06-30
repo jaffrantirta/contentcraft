@@ -56,6 +56,7 @@ export const identity = pgTable("identity", {
   // top-left | top-center | top-right | footer-left | footer-center | footer-right | none
   logoPosition: varchar("logo_position", { length: 20 }).notNull().default("none"),
   footerText: text("footer_text"),
+  footerVariants: jsonb("footer_variants").$type<{ id: string; text: string; createdAt: string }[]>().notNull().default([]),
   website: text("website"),
   tagline: text("tagline"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
