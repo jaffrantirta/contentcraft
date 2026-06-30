@@ -77,6 +77,8 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
   const [loading, setLoading] = useState(true)
   const [regenerating, setRegenerating] = useState(false)
   const [activeSlide, setActiveSlide] = useState(0)
+  const [dlWithLogo, setDlWithLogo] = useState(true)
+  const [dlWithFooter, setDlWithFooter] = useState(true)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -118,7 +120,12 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
     toast.success("copied to clipboard")
   }
 
-  const downloadSlide = useCallback(async (imageUrl: string, slideNum: number, caption: string | null) => {
+  const downloadSlide = useCallback(async (
+    imageUrl: string,
+    slideNum: number,
+    caption: string | null,
+    opts: { withLogo: boolean; withFooter: boolean },
+  ) => {
     const logoUrl = identity?.logoUrl
     const logoPos = identity?.logoPosition ?? "none"
     const activeFooterImageUrl = identity?.activeFooterImageUrl ?? null
@@ -138,10 +145,9 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
         })
 
       const toLoad: Promise<HTMLImageElement | null>[] = [loadImg(proxyUrl(imageUrl))]
-      if (logoUrl && logoPos !== "none") toLoad.push(loadImg(proxyUrl(logoUrl)))
+      if (opts.withLogo && logoUrl && logoPos !== "none") toLoad.push(loadImg(proxyUrl(logoUrl)))
       else toLoad.push(Promise.resolve(null))
-      // Proxy the S3 footer URL — direct S3 cross-origin taints the canvas
-      if (activeFooterImageUrl) toLoad.push(loadImg(proxyUrl(activeFooterImageUrl)))
+      if (opts.withFooter && activeFooterImageUrl) toLoad.push(loadImg(proxyUrl(activeFooterImageUrl)))
       else toLoad.push(Promise.resolve(null))
 
       const [base, logo, footerImg] = await Promise.all(toLoad) as [HTMLImageElement, HTMLImageElement | null, HTMLImageElement | null]
@@ -154,10 +160,17 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
 
       const pad = Math.round(canvas.width * 0.05)
 
-      // footer image strip (composited before caption so caption text sits on top)
+      // footer image — object-cover from top (match CSS object-cover object-top)
       if (footerImg) {
-        const fH = Math.round(canvas.height * 0.13)
-        ctx.drawImage(footerImg, 0, canvas.height - fH, canvas.width, fH)
+        const fH = Math.round(canvas.height * 0.18)
+        // Scale source so width fills canvas, then crop height from top
+        const scale = canvas.width / footerImg.naturalWidth
+        const srcH = Math.min(Math.round(fH / scale), footerImg.naturalHeight)
+        ctx.drawImage(
+          footerImg,
+          0, 0, footerImg.naturalWidth, srcH,
+          0, canvas.height - fH, canvas.width, fH,
+        )
       }
 
       // caption text overlay
@@ -370,7 +383,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
 
                 {/* footer image overlay */}
                 {identity?.activeFooterVariantId && (
-                  <div className="absolute bottom-0 left-0 right-0 h-[13%] pointer-events-none overflow-hidden">
+                  <div className="absolute bottom-0 left-0 right-0 h-[18%] pointer-events-none overflow-hidden">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={`/api/footer/images/${identity.activeFooterVariantId}`}
@@ -436,21 +449,50 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
 
           {/* download */}
           {currentSlide?.imageUrl && !currentSlideGenerating && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs h-8 w-full gap-2"
-              onClick={() => downloadSlide(currentSlide.imageUrl!, activeSlide + 1, currentSlide.caption)}
-            >
-              <Download className="h-3.5 w-3.5" />
-              download slide {activeSlide + 1}
-              {identity?.activeFooterVariantId && (
-                <span className="text-[10px] text-muted-foreground ml-1">+ footer</span>
+            <div className="space-y-2">
+              {/* overlay options */}
+              {(identity?.logoUrl && identity.logoPosition !== "none" || identity?.activeFooterVariantId) && (
+                <div className="flex items-center gap-4 px-1">
+                  <p className="text-[10px] text-muted-foreground shrink-0">include:</p>
+                  {identity?.logoUrl && identity.logoPosition !== "none" && (
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={dlWithLogo}
+                        onChange={e => setDlWithLogo(e.target.checked)}
+                        className="h-3.5 w-3.5 accent-primary"
+                      />
+                      <span className="text-[11px] text-muted-foreground">logo</span>
+                    </label>
+                  )}
+                  {identity?.activeFooterVariantId && (
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={dlWithFooter}
+                        onChange={e => setDlWithFooter(e.target.checked)}
+                        className="h-3.5 w-3.5 accent-primary"
+                      />
+                      <span className="text-[11px] text-muted-foreground">footer</span>
+                    </label>
+                  )}
+                </div>
               )}
-              {identity?.logoUrl && identity.logoPosition !== "none" && (
-                <span className="text-[10px] text-muted-foreground ml-1">+ logo</span>
-              )}
-            </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs h-8 w-full gap-2"
+                onClick={() => downloadSlide(
+                  currentSlide.imageUrl!,
+                  activeSlide + 1,
+                  currentSlide.caption,
+                  { withLogo: dlWithLogo, withFooter: dlWithFooter },
+                )}
+              >
+                <Download className="h-3.5 w-3.5" />
+                download slide {activeSlide + 1}
+              </Button>
+            </div>
           )}
         </div>
 
