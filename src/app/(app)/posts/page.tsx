@@ -24,9 +24,16 @@ export default function PostsPage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch("/api/posts").then(r => r.json()).then(data => {
-      setPosts(Array.isArray(data) ? data : [])
-    }).finally(() => setLoading(false))
+    fetch("/api/posts")
+      .then(r => {
+        if (!r.ok) throw new Error(`${r.status}`)
+        return r.json()
+      })
+      .then(data => {
+        setPosts(Array.isArray(data) ? data : [])
+      })
+      .catch(err => console.error("[posts] fetch failed:", err))
+      .finally(() => setLoading(false))
   }, [])
 
   return (
