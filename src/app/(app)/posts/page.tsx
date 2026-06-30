@@ -22,17 +22,25 @@ interface Post {
 export default function PostsPage() {
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
+  const [apiError, setApiError] = useState<string | null>(null)
 
   useEffect(() => {
     fetch("/api/posts")
-      .then(r => {
-        if (!r.ok) throw new Error(`${r.status}`)
-        return r.json()
+      .then(async r => {
+        const text = await r.text()
+        if (!r.ok) {
+          setApiError(`${r.status}: ${text}`)
+          return
+        }
+        try {
+          const data = JSON.parse(text)
+          setPosts(Array.isArray(data) ? data : [])
+          if (!Array.isArray(data)) setApiError(`unexpected: ${text.slice(0, 200)}`)
+        } catch {
+          setApiError(`parse error: ${text.slice(0, 200)}`)
+        }
       })
-      .then(data => {
-        setPosts(Array.isArray(data) ? data : [])
-      })
-      .catch(err => console.error("[posts] fetch failed:", err))
+      .catch(err => setApiError(String(err)))
       .finally(() => setLoading(false))
   }, [])
 
@@ -50,6 +58,12 @@ export default function PostsPage() {
           </Button>
         </Link>
       </div>
+
+      {apiError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-xs text-destructive font-mono break-all">
+          api error: {apiError}
+        </div>
+      )}
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
