@@ -78,6 +78,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
   const [regenerating, setRegenerating] = useState(false)
   const [activeSlide, setActiveSlide] = useState(0)
   const [dlWithLogo, setDlWithLogo] = useState(true)
+  const [dlWithFooter, setDlWithFooter] = useState(true)
   const [footerAspect, setFooterAspect] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -453,19 +454,32 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
           {/* download */}
           {currentSlide?.imageUrl && !currentSlideGenerating && (
             <div className="space-y-2">
-              {/* overlay options — logo only */}
-              {identity?.logoUrl && identity.logoPosition !== "none" && (
+              {/* overlay options */}
+              {(identity?.logoUrl && identity.logoPosition !== "none" || identity?.activeFooterVariantId) && (
                 <div className="flex items-center gap-4 px-1">
                   <p className="text-[10px] text-muted-foreground shrink-0">include:</p>
-                  <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={dlWithLogo}
-                      onChange={e => setDlWithLogo(e.target.checked)}
-                      className="h-3.5 w-3.5 accent-primary"
-                    />
-                    <span className="text-[11px] text-muted-foreground">logo</span>
-                  </label>
+                  {identity?.logoUrl && identity.logoPosition !== "none" && (
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={dlWithLogo}
+                        onChange={e => setDlWithLogo(e.target.checked)}
+                        className="h-3.5 w-3.5 accent-primary"
+                      />
+                      <span className="text-[11px] text-muted-foreground">logo</span>
+                    </label>
+                  )}
+                  {identity?.activeFooterVariantId && (
+                    <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={dlWithFooter}
+                        onChange={e => setDlWithFooter(e.target.checked)}
+                        className="h-3.5 w-3.5 accent-primary"
+                      />
+                      <span className="text-[11px] text-muted-foreground">footer</span>
+                    </label>
+                  )}
                 </div>
               )}
               <Button
@@ -476,7 +490,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                   currentSlide.imageUrl!,
                   activeSlide + 1,
                   currentSlide.caption,
-                  { withLogo: dlWithLogo, withFooter: true },
+                  { withLogo: dlWithLogo, withFooter: dlWithFooter },
                 )}
               >
                 <Download className="h-3.5 w-3.5" />
