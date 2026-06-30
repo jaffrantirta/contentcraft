@@ -35,7 +35,6 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
   const imageSize = sizeMap[postRow.aspectRatio] || "1024x1024"
 
   const hasCaption = !!slideRow.caption?.trim()
-  const hasImageFooter = !!identityRow?.activeFooterVariantId
   const logoZone = (identityRow?.logoUrl && identityRow.logoPosition && identityRow.logoPosition !== "none")
     ? `Leave the ${identityRow.logoPosition.replace("-", " ")} corner completely empty — a brand logo will be placed there.`
     : ""
@@ -46,16 +45,14 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
       "Create a complete, professional social media carousel slide graphic.",
       `Slide text (must appear clearly and prominently in the design): "${slideRow.caption}"`,
       `Visual concept: ${slideRow.imagePrompt}`,
-      hasImageFooter ? "Leave the bottom 15% of the image as a clean solid color band — a footer image will be placed there." : "",
       logoZone,
-      "Bold, readable typography integrated naturally into the design. High quality, eye-catching, Instagram-ready.",
+      "Bold, readable typography integrated naturally into the design. High quality, eye-catching, Instagram-ready. Full bleed — no empty bars or borders.",
     ].filter(Boolean).join(" ")
   } else {
     fullPrompt = [
       slideRow.imagePrompt,
-      hasImageFooter ? "Leave the bottom 15% of the image as a clean solid color band — a footer image will be placed there." : "",
       logoZone,
-      "No text or words in the image.",
+      "No text or words in the image. Full bleed — no empty bars or borders.",
     ].filter(Boolean).join(" ")
   }
 
