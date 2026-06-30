@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react"
 import { Card } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { ImageIcon, PlusCircle } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 interface Post {
   id: string
@@ -17,6 +17,23 @@ interface Post {
   slideCount: number
   createdAt: string
   slides: Array<{ imageUrl: string | null }>
+}
+
+const STATUS_STYLES: Record<string, { label: string; className: string }> = {
+  done:          { label: "done",        className: "bg-green-500/15 text-green-500 border border-green-500/25" },
+  generating:    { label: "generating",  className: "bg-blue-500/15 text-blue-400 border border-blue-500/25 animate-pulse" },
+  captions_done: { label: "processing",  className: "bg-yellow-500/15 text-yellow-500 border border-yellow-500/25 animate-pulse" },
+  error:         { label: "error",       className: "bg-red-500/15 text-red-500 border border-red-500/25" },
+  pending:       { label: "pending",     className: "bg-muted text-muted-foreground border border-border/40" },
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const s = STATUS_STYLES[status] ?? { label: status, className: "bg-muted text-muted-foreground border border-border/40" }
+  return (
+    <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium", s.className)}>
+      {s.label}
+    </span>
+  )
 }
 
 export default function PostsPage() {
@@ -67,9 +84,9 @@ export default function PostsPage() {
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[1, 2, 3, 4].map(i => <Card key={i} className="h-40 animate-pulse bg-muted" />)}
+          {[1, 2, 3, 4].map(i => <Card key={i} className="h-32 animate-pulse bg-muted" />)}
         </div>
-      ) : posts.length === 0 ? (
+      ) : posts.length === 0 && !apiError ? (
         <div className="rounded-xl border border-dashed border-border/60 p-16 text-center space-y-3">
           <ImageIcon className="h-8 w-8 text-muted-foreground mx-auto" />
           <p className="text-sm text-muted-foreground">you haven&apos;t created any posts yet</p>
@@ -83,7 +100,7 @@ export default function PostsPage() {
             <Link key={p.id} href={`/posts/${p.id}`}>
               <Card className="p-4 hover:border-border transition-colors cursor-pointer group">
                 <div className="flex gap-3">
-                  {/* preview strip */}
+                  {/* slide thumbnails */}
                   <div className="flex gap-1 shrink-0">
                     {[0, 1, 2].map(i => (
                       <div key={i} className="w-10 h-14 rounded-md bg-muted overflow-hidden flex items-center justify-center">
@@ -91,7 +108,7 @@ export default function PostsPage() {
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={p.slides[i].imageUrl!} alt="" className="w-full h-full object-cover" />
                         ) : i === 0 ? (
-                          <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                          <ImageIcon className="h-4 w-4 text-muted-foreground/50" />
                         ) : null}
                       </div>
                     ))}
@@ -101,12 +118,12 @@ export default function PostsPage() {
                     <p className="text-xs font-medium truncate group-hover:text-primary transition-colors">
                       {p.title || p.brief}
                     </p>
-                    <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">{p.brief}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{p.brief}</p>
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      <Badge variant="secondary" className="text-[10px]">{p.status}</Badge>
-                      <Badge variant="outline" className="text-[10px]">{p.vibe}</Badge>
-                      <Badge variant="outline" className="text-[10px]">{p.language}</Badge>
-                      <span className="text-[10px] text-muted-foreground">{p.slides?.length || p.slideCount} slides</span>
+                      <StatusBadge status={p.status} />
+                      <span className="text-[10px] text-muted-foreground">{p.vibe}</span>
+                      <span className="text-[10px] text-muted-foreground uppercase">{p.language}</span>
+                      <span className="text-[10px] text-muted-foreground">{p.slideCount} slides</span>
                     </div>
                   </div>
                 </div>
