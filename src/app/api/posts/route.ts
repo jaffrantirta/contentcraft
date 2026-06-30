@@ -22,7 +22,7 @@ export async function GET() {
       .select()
       .from(slide)
       .where(inArray(slide.postId, posts.map(p => p.id)))
-      .orderBy(asc(slide.order))
+      .orderBy(asc(slide.createdAt))
 
     const result = posts.map(p => ({
       ...p,

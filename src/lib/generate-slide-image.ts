@@ -84,7 +84,7 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
 
   await db.update(slide).set({ imageUrl }).where(eq(slide.id, slideId))
 
-  const allSlides = await db.select().from(slide).where(eq(slide.postId, slideRow.postId)).orderBy(asc(slide.order))
+  const allSlides = await db.select().from(slide).where(eq(slide.postId, slideRow.postId)).orderBy(asc(slide.createdAt))
   const allDone = allSlides.every(s => s.id === slideId ? true : s.imageUrl !== null)
   if (allDone) {
     await db.update(post).set({ status: "done" }).where(eq(post.id, slideRow.postId))
