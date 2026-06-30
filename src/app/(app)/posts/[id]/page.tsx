@@ -79,6 +79,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
   const [activeSlide, setActiveSlide] = useState(0)
   const [dlWithLogo, setDlWithLogo] = useState(true)
   const [dlWithFooter, setDlWithFooter] = useState(true)
+  const [footerAspect, setFooterAspect] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -107,6 +108,9 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
 
     return () => { if (pollRef.current) clearTimeout(pollRef.current) }
   }, [post, id])
+
+  // reset footer aspect when active footer changes (new image will re-set it on load)
+  useEffect(() => { setFooterAspect(null) }, [identity?.activeFooterVariantId])
 
   // derived: which slides are still pending
   const generatingSlides = new Set(
@@ -160,17 +164,10 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
 
       const pad = Math.round(canvas.width * 0.05)
 
-      // footer image — object-cover from top (match CSS object-cover object-top)
+      // footer image — pure ratio: scale to canvas width, show entire image at natural proportions
       if (footerImg) {
-        const fH = Math.round(canvas.height * 0.18)
-        // Scale source so width fills canvas, then crop height from top
-        const scale = canvas.width / footerImg.naturalWidth
-        const srcH = Math.min(Math.round(fH / scale), footerImg.naturalHeight)
-        ctx.drawImage(
-          footerImg,
-          0, 0, footerImg.naturalWidth, srcH,
-          0, canvas.height - fH, canvas.width, fH,
-        )
+        const fH = Math.round((footerImg.naturalHeight / footerImg.naturalWidth) * canvas.width)
+        ctx.drawImage(footerImg, 0, canvas.height - fH, canvas.width, fH)
       }
 
       // caption text overlay
@@ -381,14 +378,21 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                   className="w-full h-full object-cover"
                 />
 
-                {/* footer image overlay */}
+                {/* footer image overlay — height driven by footer image's own aspect ratio */}
                 {identity?.activeFooterVariantId && (
-                  <div className="absolute bottom-0 left-0 right-0 h-[18%] pointer-events-none overflow-hidden">
+                  <div
+                    className="absolute bottom-0 left-0 right-0 pointer-events-none"
+                    style={footerAspect ? { aspectRatio: footerAspect } : { height: "18%" }}
+                  >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={`/api/footer/images/${identity.activeFooterVariantId}`}
                       alt="footer"
-                      className="w-full h-full object-cover object-top"
+                      className="w-full h-full block"
+                      onLoad={e => {
+                        const img = e.currentTarget
+                        setFooterAspect(`${img.naturalWidth} / ${img.naturalHeight}`)
+                      }}
                     />
                   </div>
                 )}

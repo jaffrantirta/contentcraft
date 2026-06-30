@@ -45,11 +45,11 @@ export async function POST(req: NextRequest) {
   const imageModel = isByok && settingsRow?.byokModel ? settingsRow.byokModel : DEFAULT_IMAGE_MODEL
 
   const prompt = [
-    "Design a professional horizontal footer banner for a social media carousel post.",
+    "Design a professional horizontal footer banner strip for a social media carousel slide.",
     `User brief: ${brief.trim()}`,
     ...brandParts,
-    "Fill the entire image with the footer design — clean, elegant, branded. Horizontal banner format.",
-    "Include brand elements, social handles, website, or CTAs as described. No extra white borders.",
+    "IMPORTANT: The design will be cropped to a very wide, thin horizontal strip (approximately 6:1 width-to-height ratio). Place ALL key design elements — brand name, social handle, website, CTA — in the TOP THIRD of the image only. The bottom two-thirds will be cropped out. Keep the layout wide and flat, not tall or centered.",
+    "Clean background, elegant typography, no extra white borders. High quality, Instagram-ready.",
   ].join("\n")
 
   try {

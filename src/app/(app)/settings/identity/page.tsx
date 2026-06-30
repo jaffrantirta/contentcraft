@@ -505,7 +505,7 @@ export default function IdentityPage() {
             <span className="text-xs text-muted-foreground">
               {uploadingFooter ? "uploading..." : variants.length >= footerLimit ? `limit reached (${footerLimit})` : "click to upload footer"}
             </span>
-            <span className="text-[10px] text-muted-foreground">PNG, JPG, WebP · max 5MB · landscape recommended</span>
+            <span className="text-[10px] text-muted-foreground">PNG, JPG, WebP · max 5MB · ideal size: 1536 × 276 px (wide banner)</span>
           </button>
           <input
             ref={footerInputRef}
