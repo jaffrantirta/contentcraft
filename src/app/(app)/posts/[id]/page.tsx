@@ -46,7 +46,7 @@ interface Identity {
   companyName: string | null
   logoUrl: string | null
   logoPosition: LogoPosition
-  footerText: string | null
+  activeFooterVariantId: string | null
 }
 
 function logoOverlayClass(position: LogoPosition): string {
@@ -72,6 +72,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
   const router = useRouter()
   const [post, setPost] = useState<Post | null>(null)
   const [identity, setIdentity] = useState<Identity | null>(null)
+  const [plan, setPlan] = useState<string>("free")
   const [loading, setLoading] = useState(true)
   const [regenerating, setRegenerating] = useState(false)
   const [activeSlide, setActiveSlide] = useState(0)
@@ -81,9 +82,11 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
     Promise.all([
       getPost(id),
       fetch("/api/identity").then(r => r.ok ? r.json() : null),
-    ]).then(([postData, identityData]) => {
+      fetch("/api/settings").then(r => r.ok ? r.json() : null),
+    ]).then(([postData, identityData, settingsData]) => {
       setPost(postData)
       if (identityData) setIdentity(identityData)
+      if (settingsData?.plan) setPlan(settingsData.plan)
     }).finally(() => setLoading(false))
   }, [id])
 
@@ -117,7 +120,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
   const downloadSlide = useCallback(async (imageUrl: string, slideNum: number, caption: string | null) => {
     const logoUrl = identity?.logoUrl
     const logoPos = identity?.logoPosition ?? "none"
-    const footerText = identity?.footerText ?? null
+    const activeFooterVariantId = identity?.activeFooterVariantId ?? null
     const showCaption = post?.captionMode === "per_slide" && caption
 
     try {
@@ -133,9 +136,13 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
           img.src = src
         })
 
-      const toLoad: Promise<HTMLImageElement>[] = [loadImg(proxyUrl(imageUrl))]
+      const toLoad: Promise<HTMLImageElement | null>[] = [loadImg(proxyUrl(imageUrl))]
       if (logoUrl && logoPos !== "none") toLoad.push(loadImg(proxyUrl(logoUrl)))
-      const [base, logo] = await Promise.all(toLoad)
+      else toLoad.push(Promise.resolve(null))
+      if (activeFooterVariantId) toLoad.push(loadImg(`/api/footer/images/${activeFooterVariantId}`))
+      else toLoad.push(Promise.resolve(null))
+
+      const [base, logo, footerImg] = await Promise.all(toLoad) as [HTMLImageElement, HTMLImageElement | null, HTMLImageElement | null]
 
       const canvas = document.createElement("canvas")
       canvas.width = base.naturalWidth
@@ -144,6 +151,12 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
       ctx.drawImage(base, 0, 0)
 
       const pad = Math.round(canvas.width * 0.05)
+
+      // footer image strip (composited before caption so caption text sits on top)
+      if (footerImg) {
+        const fH = Math.round(canvas.height * 0.13)
+        ctx.drawImage(footerImg, 0, canvas.height - fH, canvas.width, fH)
+      }
 
       // caption text overlay
       if (showCaption) {
@@ -179,19 +192,6 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
           ctx.fillText(l, pad, canvas.height - pad - (lines.length - 1 - i) * lineH)
         })
         ctx.shadowBlur = 0
-      }
-
-      // footer bar
-      if (footerText && post?.showFooter) {
-        const fSize = Math.round(canvas.width * 0.028)
-        const fH = fSize * 2.4
-        ctx.fillStyle = "rgba(0,0,0,0.55)"
-        ctx.fillRect(0, canvas.height - fH, canvas.width, fH)
-        ctx.font = `500 ${fSize}px system-ui, sans-serif`
-        ctx.fillStyle = "rgba(255,255,255,0.85)"
-        ctx.textAlign = "center"
-        ctx.textBaseline = "middle"
-        ctx.fillText(footerText, canvas.width / 2, canvas.height - fH / 2)
       }
 
       // logo overlay
@@ -327,6 +327,17 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
         </div>
       </div>
 
+      {/* image expiry warning for free/byok users */}
+      {(plan === "free" || plan === "byok") && post.status === "done" && (
+        <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/8 px-4 py-2.5 flex items-start gap-2.5">
+          <span className="text-yellow-500 text-xs mt-0.5 shrink-0">⚠</span>
+          <p className="text-xs text-yellow-600 dark:text-yellow-400 leading-relaxed">
+            <span className="font-medium">images may expire soon</span> — AI-generated images are not stored on your plan.
+            Download your slides now. <Link href="/billing" className="underline underline-offset-2">upgrade to Pro</Link> to store images for 30 days.
+          </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* image area */}
         <div className="space-y-4">
@@ -354,6 +365,18 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                   alt={currentSlide.imagePrompt || "slide"}
                   className="w-full h-full object-cover"
                 />
+
+                {/* footer image overlay */}
+                {identity?.activeFooterVariantId && (
+                  <div className="absolute bottom-0 left-0 right-0 h-[13%] pointer-events-none overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`/api/footer/images/${identity.activeFooterVariantId}`}
+                      alt="footer"
+                      className="w-full h-full object-cover object-top"
+                    />
+                  </div>
+                )}
 
                 {/* logo overlay */}
                 {identity?.logoUrl && identity.logoPosition !== "none" && (
@@ -419,6 +442,9 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
             >
               <Download className="h-3.5 w-3.5" />
               download slide {activeSlide + 1}
+              {identity?.activeFooterVariantId && (
+                <span className="text-[10px] text-muted-foreground ml-1">+ footer</span>
+              )}
               {identity?.logoUrl && identity.logoPosition !== "none" && (
                 <span className="text-[10px] text-muted-foreground ml-1">+ logo</span>
               )}

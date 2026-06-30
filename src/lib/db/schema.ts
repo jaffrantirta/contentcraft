@@ -53,15 +53,29 @@ export const identity = pgTable("identity", {
   userId: text("user_id").notNull().unique().references(() => user.id, { onDelete: "cascade" }),
   companyName: text("company_name"),
   logoUrl: text("logo_url"),
+  logoStorageKey: text("logo_storage_key"),
   // top-left | top-center | top-right | footer-left | footer-center | footer-right | none
   logoPosition: varchar("logo_position", { length: 20 }).notNull().default("none"),
+  // footerText kept in DB but no longer used in UI (image footer replaces it)
   footerText: text("footer_text"),
-  footerVariants: jsonb("footer_variants").$type<{ id: string; text: string; createdAt: string }[]>().notNull().default([]),
+  footerVariants: jsonb("footer_variants").$type<{ id: string; brief: string; createdAt: string }[]>().notNull().default([]),
+  activeFooterVariantId: text("active_footer_variant_id"),
   website: text("website"),
   tagline: text("tagline"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 })
+
+export const footerImage = pgTable("footer_image", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  imageUrl: text("image_url").notNull(),
+  storageKey: text("storage_key").notNull(),
+  brief: text("brief"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (t) => [
+  index("footer_image_user_idx").on(t.userId),
+])
 
 export const userSettings = pgTable("user_settings", {
   id: text("id").primaryKey(),
@@ -145,3 +159,4 @@ export type UserSettings = typeof userSettings.$inferSelect
 export type Post = typeof post.$inferSelect
 export type Slide = typeof slide.$inferSelect
 export type Subscription = typeof subscription.$inferSelect
+export type FooterImage = typeof footerImage.$inferSelect
