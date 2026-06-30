@@ -114,18 +114,11 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
     toast.success("copied to clipboard")
   }
 
-  const downloadSlide = useCallback(async (imageUrl: string, slideNum: number) => {
+  const downloadSlide = useCallback(async (imageUrl: string, slideNum: number, caption: string | null) => {
     const logoUrl = identity?.logoUrl
     const logoPos = identity?.logoPosition ?? "none"
-
-    if (!logoUrl || logoPos === "none") {
-      const a = document.createElement("a")
-      a.href = imageUrl
-      a.download = `slide-${slideNum}.png`
-      a.target = "_blank"
-      a.click()
-      return
-    }
+    const footerText = identity?.footerText ?? null
+    const showCaption = post?.captionMode === "per_slide" && caption
 
     try {
       const proxyUrl = (url: string) =>
@@ -140,10 +133,9 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
           img.src = src
         })
 
-      const [base, logo] = await Promise.all([
-        loadImg(proxyUrl(imageUrl)),
-        loadImg(proxyUrl(logoUrl)),
-      ])
+      const toLoad: Promise<HTMLImageElement>[] = [loadImg(proxyUrl(imageUrl))]
+      if (logoUrl && logoPos !== "none") toLoad.push(loadImg(proxyUrl(logoUrl)))
+      const [base, logo] = await Promise.all(toLoad)
 
       const canvas = document.createElement("canvas")
       canvas.width = base.naturalWidth
@@ -151,21 +143,70 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
       const ctx = canvas.getContext("2d")!
       ctx.drawImage(base, 0, 0)
 
-      const logoH = Math.round(canvas.height * 0.09)
-      const logoW = Math.round(logo.naturalWidth * (logoH / logo.naturalHeight))
-      const pad = Math.round(canvas.width * 0.03)
-      const isTop = logoPos.startsWith("top")
-      const isFooter = logoPos.startsWith("footer")
-      const side = logoPos.split("-")[1] as "left" | "center" | "right"
-      let x = pad
-      const y = isTop ? pad : canvas.height - logoH - pad
-      if (side === "center") x = (canvas.width - logoW) / 2
-      if (side === "right") x = canvas.width - logoW - pad
-      if (isFooter) {
-        ctx.fillStyle = "rgba(0,0,0,0.25)"
-        ctx.fillRect(0, canvas.height - logoH - pad * 2, canvas.width, logoH + pad * 2)
+      const pad = Math.round(canvas.width * 0.05)
+
+      // caption text overlay
+      if (showCaption) {
+        const fontSize = Math.round(canvas.width * 0.048)
+        const lineH = fontSize * 1.4
+        ctx.font = `700 ${fontSize}px system-ui, sans-serif`
+        const maxW = canvas.width - pad * 2
+        const words = caption!.split(" ")
+        const lines: string[] = []
+        let line = ""
+        for (const w of words) {
+          const test = line ? `${line} ${w}` : w
+          if (ctx.measureText(test).width > maxW && line) {
+            lines.push(line); if (lines.length >= 5) break; line = w
+          } else { line = test }
+        }
+        if (line && lines.length < 5) lines.push(line)
+
+        const gradH = lines.length * lineH + pad * 2.5
+        const grad = ctx.createLinearGradient(0, canvas.height - gradH, 0, canvas.height)
+        grad.addColorStop(0, "rgba(0,0,0,0)")
+        grad.addColorStop(0.4, "rgba(0,0,0,0.65)")
+        grad.addColorStop(1, "rgba(0,0,0,0.88)")
+        ctx.fillStyle = grad
+        ctx.fillRect(0, canvas.height - gradH, canvas.width, gradH)
+
+        ctx.fillStyle = "#ffffff"
+        ctx.shadowColor = "rgba(0,0,0,0.7)"
+        ctx.shadowBlur = 12
+        ctx.textAlign = "left"
+        ctx.textBaseline = "bottom"
+        lines.forEach((l, i) => {
+          ctx.fillText(l, pad, canvas.height - pad - (lines.length - 1 - i) * lineH)
+        })
+        ctx.shadowBlur = 0
       }
-      ctx.drawImage(logo, x, y, logoW, logoH)
+
+      // footer bar
+      if (footerText && post?.showFooter) {
+        const fSize = Math.round(canvas.width * 0.028)
+        const fH = fSize * 2.4
+        ctx.fillStyle = "rgba(0,0,0,0.55)"
+        ctx.fillRect(0, canvas.height - fH, canvas.width, fH)
+        ctx.font = `500 ${fSize}px system-ui, sans-serif`
+        ctx.fillStyle = "rgba(255,255,255,0.85)"
+        ctx.textAlign = "center"
+        ctx.textBaseline = "middle"
+        ctx.fillText(footerText, canvas.width / 2, canvas.height - fH / 2)
+      }
+
+      // logo overlay
+      if (logo && logoPos !== "none") {
+        const lPad = Math.round(canvas.width * 0.03)
+        const logoH = Math.round(canvas.height * 0.08)
+        const logoW = Math.round(logo.naturalWidth * (logoH / logo.naturalHeight))
+        const isTop = logoPos.startsWith("top")
+        const side = logoPos.split("-")[1] as "left" | "center" | "right"
+        let lx = lPad
+        const ly = isTop ? lPad : canvas.height - logoH - lPad
+        if (side === "center") lx = (canvas.width - logoW) / 2
+        if (side === "right") lx = canvas.width - logoW - lPad
+        ctx.drawImage(logo, lx, ly, logoW, logoH)
+      }
 
       canvas.toBlob(blob => {
         if (!blob) return
@@ -183,7 +224,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
       a.target = "_blank"
       a.click()
     }
-  }, [identity])
+  }, [identity, post])
 
   async function handleRegenerate() {
     if (!post || regenerating) return
@@ -289,13 +330,15 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* image area */}
         <div className="space-y-4">
-          <div className={cn(
-            "rounded-xl overflow-hidden bg-muted flex items-center justify-center border border-border/60",
-            post.aspectRatio === "16:9" ? "aspect-video" :
-            post.aspectRatio === "4:5"  ? "aspect-[4/5]" :
-            post.aspectRatio === "9:16" ? "aspect-[9/16]" :
-            "aspect-square"
-          )}>
+          <div
+            style={{ containerType: "inline-size" }}
+            className={cn(
+              "rounded-xl overflow-hidden bg-muted flex items-center justify-center border border-border/60",
+              post.aspectRatio === "16:9" ? "aspect-video" :
+              post.aspectRatio === "4:5"  ? "aspect-[4/5]" :
+              post.aspectRatio === "9:16" ? "aspect-[9/16]" :
+              "aspect-square"
+            )}>
             {currentSlideGenerating ? (
               <div className="w-full h-full bg-muted animate-pulse flex items-center justify-center">
                 <div className="text-center space-y-2">
@@ -311,6 +354,30 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                   alt={currentSlide.imagePrompt || "slide"}
                   className="w-full h-full object-cover"
                 />
+
+                {/* caption overlay — per_slide mode only */}
+                {post.captionMode === "per_slide" && currentSlide.caption && (
+                  <div className="absolute inset-x-0 bottom-0 pointer-events-none"
+                    style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.6) 50%, transparent 100%)", padding: "10% 5% 5%" }}>
+                    <p className="text-white font-bold leading-snug drop-shadow-lg"
+                      style={{ fontSize: "clamp(10px, 3.5cqw, 18px)", lineClamp: "5", display: "-webkit-box", WebkitLineClamp: 5, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                      {currentSlide.caption}
+                    </p>
+                  </div>
+                )}
+
+                {/* footer bar */}
+                {identity?.footerText && post.showFooter && (
+                  <div className="absolute inset-x-0 bottom-0 pointer-events-none flex items-center justify-center"
+                    style={{ background: "rgba(0,0,0,0.55)", padding: "2% 4%" }}>
+                    <p className="text-white/85 text-center leading-none"
+                      style={{ fontSize: "clamp(8px, 2cqw, 13px)" }}>
+                      {identity.footerText}
+                    </p>
+                  </div>
+                )}
+
+                {/* logo overlay */}
                 {identity?.logoUrl && identity.logoPosition !== "none" && (
                   <div className={cn("absolute flex items-center pointer-events-none", logoOverlayClass(identity.logoPosition))}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -370,7 +437,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
               variant="outline"
               size="sm"
               className="text-xs h-8 w-full gap-2"
-              onClick={() => downloadSlide(currentSlide.imageUrl!, activeSlide + 1)}
+              onClick={() => downloadSlide(currentSlide.imageUrl!, activeSlide + 1, currentSlide.caption)}
             >
               <Download className="h-3.5 w-3.5" />
               download slide {activeSlide + 1}

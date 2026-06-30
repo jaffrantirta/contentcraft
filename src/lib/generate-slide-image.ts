@@ -33,39 +33,16 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
 
   let imageUrl: string | null = null
 
-  const captionMode = slideRow.post.captionMode ?? "per_slide"
-
-  // build prompt: visual scene + optional caption text + footer + logo zone
+  // pure visual background — all text/branding overlaid client-side for consistency
   let fullPrompt = slideRow.imagePrompt
 
-  // only burn caption text into the image for per_slide mode
-  // single = one post caption shown separately; none = no caption at all
-  if (captionMode === "per_slide" && slideRow.caption) {
-    fullPrompt += `
-
-Typography: render the following caption as bold, legible text integrated into the design. Match the font style to the visual aesthetic. Ensure strong contrast (white text on dark backgrounds, dark text on light backgrounds):
-
-"${slideRow.caption}"`
-  }
-
-  // footer: burn consistent footer text on every slide (only if post has showFooter = true)
-  if (identityRow?.footerText && slideRow.post.showFooter !== false) {
-    fullPrompt += `
-
-Footer: add a thin footer bar at the very bottom of the image. Inside it, render this text in small, clean typography: "${identityRow.footerText}". Keep it subtle but readable — use a semi-transparent dark or brand-colored strip. This footer must appear on every slide consistently.`
-  }
-
-  // logo zone: if user has a real logo, keep that area blank — CSS overlay will place it
+  // reserve blank space where real logo overlay will sit
   if (identityRow?.logoUrl && identityRow.logoPosition && identityRow.logoPosition !== "none") {
-    const zone = identityRow.logoPosition.replace("-", " ") // e.g. "top center"
-    fullPrompt += `
-
-Logo zone: leave the ${zone} area of the image completely empty — no text, no icons, no graphic elements in that zone. A real brand logo image will be placed there as an overlay after generation.`
+    const zone = identityRow.logoPosition.replace("-", " ")
+    fullPrompt += ` Leave the ${zone} area completely empty — no elements there.`
   }
 
-  fullPrompt += `
-
-Output: a complete, polished social media slide graphic.`
+  fullPrompt += ` Generate a clean background image with NO text, NO words, NO typography anywhere. Pure visual only.`
 
   try {
     const imgRes = await client.images.generate({

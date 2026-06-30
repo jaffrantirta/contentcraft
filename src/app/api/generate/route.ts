@@ -84,8 +84,8 @@ export async function POST(req: NextRequest) {
     ? ` Brand context: ${identityData.companyName}${identityData.tagline ? ` — ${identityData.tagline}` : ""}.`
     : ""
 
-  // image prompt describes ONLY the visual scene — caption, footer, and logo zone are injected at generation time
-  const imagePromptRule = `For "imagePrompt": describe the visual scene, background, mood, lighting, objects, and composition only. Style: ${styleHint}. Color palette: ${colorPalette?.join(", ") || "vibrant"}.${withSubject ? " Include a person/subject." : " No people."}${brandNote} Do NOT include caption text, footer text, or logo instructions here — those are added automatically.`
+  // imagePrompt = pure visual background — text is overlaid client-side (consistent unlike AI text rendering)
+  const imagePromptRule = `For "imagePrompt": describe a visually striking background scene — colors, mood, lighting, composition, objects. Style: ${styleHint}. Color palette: ${colorPalette?.join(", ") || "vibrant"}.${withSubject ? " Include a person/subject." : " No people."}${brandNote} NO text, words, or typography — pure visual background only. Caption text is overlaid separately.`
 
   let captionPrompt: string
 
