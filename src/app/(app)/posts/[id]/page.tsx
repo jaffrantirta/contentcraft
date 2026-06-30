@@ -47,6 +47,7 @@ interface Identity {
   logoUrl: string | null
   logoPosition: LogoPosition
   activeFooterVariantId: string | null
+  activeFooterImageUrl: string | null
 }
 
 function logoOverlayClass(position: LogoPosition): string {
@@ -120,7 +121,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
   const downloadSlide = useCallback(async (imageUrl: string, slideNum: number, caption: string | null) => {
     const logoUrl = identity?.logoUrl
     const logoPos = identity?.logoPosition ?? "none"
-    const activeFooterVariantId = identity?.activeFooterVariantId ?? null
+    const activeFooterImageUrl = identity?.activeFooterImageUrl ?? null
     const showCaption = post?.captionMode === "per_slide" && caption
 
     try {
@@ -139,7 +140,8 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
       const toLoad: Promise<HTMLImageElement | null>[] = [loadImg(proxyUrl(imageUrl))]
       if (logoUrl && logoPos !== "none") toLoad.push(loadImg(proxyUrl(logoUrl)))
       else toLoad.push(Promise.resolve(null))
-      if (activeFooterVariantId) toLoad.push(loadImg(`/api/footer/images/${activeFooterVariantId}`))
+      // Proxy the S3 footer URL — direct S3 cross-origin taints the canvas
+      if (activeFooterImageUrl) toLoad.push(loadImg(proxyUrl(activeFooterImageUrl)))
       else toLoad.push(Promise.resolve(null))
 
       const [base, logo, footerImg] = await Promise.all(toLoad) as [HTMLImageElement, HTMLImageElement | null, HTMLImageElement | null]

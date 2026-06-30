@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { identity } from "@/lib/db/schema"
-import { eq } from "drizzle-orm"
+import { identity, footerImage } from "@/lib/db/schema"
+import { eq, and } from "drizzle-orm"
 import { v4 as uuidv4 } from "uuid"
 import { headers } from "next/headers"
 
@@ -13,9 +13,22 @@ export async function GET() {
   const [result] = await db.select().from(identity).where(eq(identity.userId, session.user.id)).limit(1)
   if (!result) return NextResponse.json(null)
 
-  // Exclude heavy footerVariants from this response — use /api/footer/variants
+  // Resolve active footer image URL so the client can proxy it for canvas downloads
+  let activeFooterImageUrl: string | null = null
+  if (result.activeFooterVariantId) {
+    const [fImg] = await db
+      .select({ imageUrl: footerImage.imageUrl })
+      .from(footerImage)
+      .where(and(
+        eq(footerImage.id, result.activeFooterVariantId),
+        eq(footerImage.userId, session.user.id),
+      ))
+      .limit(1)
+    activeFooterImageUrl = fImg?.imageUrl ?? null
+  }
+
   const { footerVariants: _fv, footerText: _ft, ...rest } = result
-  return NextResponse.json(rest)
+  return NextResponse.json({ ...rest, activeFooterImageUrl })
 }
 
 export async function PUT(req: NextRequest) {
