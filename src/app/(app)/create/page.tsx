@@ -25,7 +25,6 @@ interface FormState {
   language: "id" | "en"
   slideCount: number
   withSubject: boolean
-  showFooter: boolean
   vibe: VibeId
   designStyle: StyleId
   colorPalette: PaletteId
@@ -42,7 +41,6 @@ export default function CreatePage() {
     language: "id",
     slideCount: 3,
     withSubject: false,
-    showFooter: true,
     vibe: "professional",
     designStyle: "realistic",
     colorPalette: "ocean",
@@ -94,7 +92,6 @@ export default function CreatePage() {
           language: form.language,
           slideCount: form.slideCount,
           withSubject: form.withSubject,
-          showFooter: form.showFooter,
           vibe: form.vibe,
           designStyle: form.designStyle,
           colorPalette: selectedPalette?.colors || [],
@@ -394,36 +391,6 @@ export default function CreatePage() {
         </div>
       </div>
 
-      {/* footer toggle */}
-      <div className="space-y-3">
-        <Label className="text-xs font-medium">footer</Label>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={() => set("showFooter", true)}
-            className={cn(
-              "p-3 rounded-lg border text-left transition-colors",
-              form.showFooter
-                ? "border-primary bg-primary/5"
-                : "border-border/60 hover:border-border bg-card"
-            )}
-          >
-            <p className="text-xs font-medium">show footer</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">footer text on every slide</p>
-          </button>
-          <button
-            onClick={() => set("showFooter", false)}
-            className={cn(
-              "p-3 rounded-lg border text-left transition-colors",
-              !form.showFooter
-                ? "border-primary bg-primary/5"
-                : "border-border/60 hover:border-border bg-card"
-            )}
-          >
-            <p className="text-xs font-medium">no footer</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">clean image, no footer bar</p>
-          </button>
-        </div>
-      </div>
 
       {/* generate — sticky on mobile, inline on desktop */}
       <div className="hidden md:flex items-center justify-between pb-8">
