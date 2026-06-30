@@ -6,8 +6,9 @@ import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { toast } from "sonner"
-import { ArrowLeft, Copy, Download, ImageOff, Loader2, RefreshCw } from "lucide-react"
+import { ArrowLeft, Check, Copy, Download, ImageOff, Loader2, RefreshCw, X } from "lucide-react"
 import Link from "next/link"
 import { GeneratingAnimation } from "@/components/app/generating-animation"
 import { cn } from "@/lib/utils"
@@ -75,11 +76,15 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
   const [identity, setIdentity] = useState<Identity | null>(null)
   const [plan, setPlan] = useState<string>("free")
   const [loading, setLoading] = useState(true)
-  const [regenerating, setRegenerating] = useState(false)
   const [activeSlide, setActiveSlide] = useState(0)
   const [dlWithLogo, setDlWithLogo] = useState(true)
   const [dlWithFooter, setDlWithFooter] = useState(true)
   const [footerAspect, setFooterAspect] = useState<string | null>(null)
+  // regenerate state
+  const [showRegenPanel, setShowRegenPanel] = useState(false)
+  const [regenSelected, setRegenSelected] = useState<Set<string>>(new Set())
+  const [regenning, setRegenning] = useState(false)
+  const [prevImages, setPrevImages] = useState<Record<string, string>>({})
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -238,45 +243,38 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
     }
   }, [identity, post])
 
-  async function handleRegenerate() {
-    if (!post || regenerating) return
-    setRegenerating(true)
+  function openRegenPanel() {
+    setRegenSelected(new Set(post?.slides.map(s => s.id) ?? []))
+    setShowRegenPanel(true)
+  }
+
+  async function startRegen() {
+    if (!post || regenning || regenSelected.size === 0) return
+    setRegenning(true)
     try {
-      const res = await fetch("/api/generate", {
+      const res = await fetch(`/api/posts/${id}/regenerate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          brief: post.brief,
-          slideBriefs: post.slideBriefs,
-          aspectRatio: post.aspectRatio,
-          language: post.language,
-          slideCount: post.slideCount,
-          withSubject: post.withSubject,
-          vibe: post.vibe,
-          designStyle: post.designStyle,
-          captionMode: post.captionMode,
-          showFooter: post.showFooter,
-          colorPalette: post.colorPalette,
-        }),
+        body: JSON.stringify({ slideIds: Array.from(regenSelected) }),
       })
-
-      if (res.status === 403) {
-        toast.error("free limit reached — upgrade to pro or add your api key")
-        router.push("/billing")
-        return
-      }
-
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        throw new Error(err.detail || err.error || "generation failed")
+        throw new Error(err.error || "regeneration failed")
       }
-
       const data = await res.json()
-      router.push(`/posts/${data.postId}`)
+      const oldImgs: Record<string, string> = {}
+      for (const [slideId, url] of Object.entries(data.oldImages ?? {})) {
+        if (url) oldImgs[slideId] = url as string
+      }
+      setPrevImages(prev => ({ ...prev, ...oldImgs }))
+      const fresh = await getPost(id)
+      if (fresh) setPost(fresh)
+      setShowRegenPanel(false)
+      toast.success(`regenerating ${regenSelected.size} slide${regenSelected.size !== 1 ? "s" : ""}…`)
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "regeneration failed")
     } finally {
-      setRegenerating(false)
+      setRegenning(false)
     }
   }
 
@@ -304,7 +302,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      {(isGeneratingImages || regenerating) && <GeneratingAnimation slideCount={post.slideCount} />}
+      {isGeneratingImages && <GeneratingAnimation slideCount={post.slideCount} />}
       <div className="space-y-4 md:space-y-6 max-w-5xl pb-8">
       {/* header */}
       <div className="flex items-center gap-3">
@@ -328,13 +326,10 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
             variant="outline"
             size="sm"
             className="text-xs h-8 gap-1.5"
-            onClick={handleRegenerate}
-            disabled={regenerating || isGeneratingImages}
+            onClick={openRegenPanel}
+            disabled={isGeneratingImages}
           >
-            {regenerating
-              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> regenerating...</>
-              : <><RefreshCw className="h-3.5 w-3.5" /> regenerate</>
-            }
+            <RefreshCw className="h-3.5 w-3.5" /> regenerate
           </Button>
         </div>
       </div>
@@ -362,60 +357,115 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
               post.aspectRatio === "9:16" ? "aspect-[9/16]" :
               "aspect-square"
             )}>
-            {currentSlideGenerating ? (
-              <div className="w-full h-full bg-muted animate-pulse flex items-center justify-center">
+            {(() => {
+              const oldUrl = currentSlide ? prevImages[currentSlide.id] : undefined
+              const isComparing = !!oldUrl
+
+              if (isComparing) {
+                // Split before/after comparison view
+                return (
+                  <div className="relative w-full h-full flex">
+                    {/* divider */}
+                    <div className="absolute inset-y-0 left-1/2 w-px bg-white/50 z-10 pointer-events-none" />
+
+                    {/* before */}
+                    <div className="relative w-1/2 h-full overflow-hidden">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={oldUrl} alt="before" className="w-full h-full object-cover" />
+                      <div className="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none">
+                        <span className="text-[10px] font-medium bg-black/60 text-white px-2 py-0.5 rounded-full">before</span>
+                      </div>
+                    </div>
+
+                    {/* after */}
+                    <div className="relative w-1/2 h-full overflow-hidden">
+                      {currentSlideGenerating ? (
+                        <div className="w-full h-full bg-muted animate-pulse flex items-center justify-center">
+                          <div className="w-6 h-6 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+                        </div>
+                      ) : currentSlide?.imageUrl ? (
+                        <>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={currentSlide.imageUrl} alt="after" className="w-full h-full object-cover" />
+                          {/* footer overlay on after side */}
+                          {identity?.activeFooterVariantId && dlWithFooter && (
+                            <div className="absolute bottom-0 left-0 right-0 pointer-events-none"
+                              style={footerAspect ? { aspectRatio: footerAspect } : { height: "18%" }}>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={`/api/footer/images/${identity.activeFooterVariantId}`} alt="footer" className="w-full h-full block"
+                                onLoad={e => { const img = e.currentTarget; setFooterAspect(`${img.naturalWidth} / ${img.naturalHeight}`) }} />
+                            </div>
+                          )}
+                          {identity?.logoUrl && identity.logoPosition !== "none" && dlWithLogo && (
+                            <div className={cn("absolute flex items-center pointer-events-none", logoOverlayClass(identity.logoPosition))}>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={identity.logoUrl} alt="logo" className="h-6 object-contain drop-shadow-md"
+                                onError={e => { (e.target as HTMLImageElement).style.display = "none" }} />
+                            </div>
+                          )}
+                        </>
+                      ) : null}
+                      <div className="absolute bottom-2 left-0 right-0 flex justify-center pointer-events-none">
+                        <span className="text-[10px] font-medium bg-primary/80 text-primary-foreground px-2 py-0.5 rounded-full">
+                          {currentSlideGenerating ? "generating…" : "after"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* dismiss comparison */}
+                    <button
+                      onClick={() => setPrevImages(prev => { const n = { ...prev }; if (currentSlide) delete n[currentSlide.id]; return n })}
+                      className="absolute top-2 right-2 z-20 bg-black/50 hover:bg-black/70 rounded-full p-1 text-white transition-colors"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )
+              }
+
+              // Normal single view
+              if (currentSlideGenerating) {
+                return (
+                  <div className="w-full h-full bg-muted animate-pulse flex items-center justify-center">
+                    <div className="text-center space-y-2">
+                      <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto" />
+                      <p className="text-xs text-muted-foreground">generating image...</p>
+                    </div>
+                  </div>
+                )
+              }
+
+              if (currentSlide?.imageUrl) {
+                return (
+                  <div className="relative w-full h-full">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={currentSlide.imageUrl} alt={currentSlide.imagePrompt || "slide"} className="w-full h-full object-cover" />
+                    {identity?.activeFooterVariantId && (
+                      <div className="absolute bottom-0 left-0 right-0 pointer-events-none"
+                        style={footerAspect ? { aspectRatio: footerAspect } : { height: "18%" }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={`/api/footer/images/${identity.activeFooterVariantId}`} alt="footer" className="w-full h-full block"
+                          onLoad={e => { const img = e.currentTarget; setFooterAspect(`${img.naturalWidth} / ${img.naturalHeight}`) }} />
+                      </div>
+                    )}
+                    {identity?.logoUrl && identity.logoPosition !== "none" && (
+                      <div className={cn("absolute flex items-center pointer-events-none", logoOverlayClass(identity.logoPosition))}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={identity.logoUrl} alt="logo" className="h-8 object-contain drop-shadow-md"
+                          onError={e => { (e.target as HTMLImageElement).style.display = "none" }} />
+                      </div>
+                    )}
+                  </div>
+                )
+              }
+
+              return (
                 <div className="text-center space-y-2">
-                  <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto" />
-                  <p className="text-xs text-muted-foreground">generating image...</p>
+                  <ImageOff className="h-8 w-8 text-muted-foreground mx-auto" />
+                  <p className="text-xs text-muted-foreground">image unavailable</p>
                 </div>
-              </div>
-            ) : currentSlide?.imageUrl ? (
-              <div className="relative w-full h-full">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={currentSlide.imageUrl}
-                  alt={currentSlide.imagePrompt || "slide"}
-                  className="w-full h-full object-cover"
-                />
-
-                {/* footer image overlay — height driven by footer image's own aspect ratio */}
-                {identity?.activeFooterVariantId && (
-                  <div
-                    className="absolute bottom-0 left-0 right-0 pointer-events-none"
-                    style={footerAspect ? { aspectRatio: footerAspect } : { height: "18%" }}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={`/api/footer/images/${identity.activeFooterVariantId}`}
-                      alt="footer"
-                      className="w-full h-full block"
-                      onLoad={e => {
-                        const img = e.currentTarget
-                        setFooterAspect(`${img.naturalWidth} / ${img.naturalHeight}`)
-                      }}
-                    />
-                  </div>
-                )}
-
-                {/* logo overlay */}
-                {identity?.logoUrl && identity.logoPosition !== "none" && (
-                  <div className={cn("absolute flex items-center pointer-events-none", logoOverlayClass(identity.logoPosition))}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={identity.logoUrl}
-                      alt="logo"
-                      className="h-8 object-contain drop-shadow-md"
-                      onError={e => { (e.target as HTMLImageElement).style.display = "none" }}
-                    />
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="text-center space-y-2">
-                <ImageOff className="h-8 w-8 text-muted-foreground mx-auto" />
-                <p className="text-xs text-muted-foreground">image unavailable</p>
-              </div>
-            )}
+              )
+            })()}
           </div>
 
           {/* slide thumbnails */}
@@ -426,7 +476,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                   key={s.id}
                   onClick={() => setActiveSlide(i)}
                   className={cn(
-                    "shrink-0 rounded-lg overflow-hidden border-2 transition-colors",
+                    "relative shrink-0 rounded-lg overflow-hidden border-2 transition-colors",
                     post.aspectRatio === "16:9" ? "w-20 h-[45px]" :
                     post.aspectRatio === "4:5"  ? "w-11 h-[55px]" :
                     post.aspectRatio === "9:16" ? "w-8 h-[57px]" :
@@ -445,6 +495,9 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                     <div className="w-full h-full bg-muted flex items-center justify-center">
                       <span className="text-[10px] text-muted-foreground">{i + 1}</span>
                     </div>
+                  )}
+                  {prevImages[s.id] && (
+                    <div className="absolute top-0.5 right-0.5 w-2.5 h-2.5 bg-primary rounded-full border border-background" />
                   )}
                 </button>
               ))}
@@ -583,6 +636,90 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
         </div>
       </div>
     </div>
+
+      {/* regenerate panel */}
+      <Dialog open={showRegenPanel} onOpenChange={setShowRegenPanel}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>select slides to regenerate</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-3 py-1">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">
+                {regenSelected.size} of {post.slides.length} selected
+              </p>
+              <button
+                className="text-xs text-primary hover:underline"
+                onClick={() =>
+                  setRegenSelected(
+                    regenSelected.size === post.slides.length
+                      ? new Set()
+                      : new Set(post.slides.map(s => s.id))
+                  )
+                }
+              >
+                {regenSelected.size === post.slides.length ? "deselect all" : "select all"}
+              </button>
+            </div>
+
+            <div className={cn(
+              "grid gap-2",
+              post.slides.length <= 3 ? "grid-cols-3" : "grid-cols-4"
+            )}>
+              {post.slides.map((s, i) => (
+                <button
+                  key={s.id}
+                  onClick={() =>
+                    setRegenSelected(prev => {
+                      const n = new Set(prev)
+                      if (n.has(s.id)) n.delete(s.id); else n.add(s.id)
+                      return n
+                    })
+                  }
+                  className={cn(
+                    "relative rounded-lg overflow-hidden border-2 transition-colors",
+                    post.aspectRatio === "16:9" ? "aspect-video" :
+                    post.aspectRatio === "4:5"  ? "aspect-[4/5]" :
+                    post.aspectRatio === "9:16" ? "aspect-[9/16]" : "aspect-square",
+                    regenSelected.has(s.id) ? "border-primary" : "border-border/40 hover:border-border"
+                  )}
+                >
+                  {s.imageUrl
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={s.imageUrl} alt="" className="w-full h-full object-cover" />
+                    : <div className="w-full h-full bg-muted flex items-center justify-center">
+                        <span className="text-[10px] text-muted-foreground">{i + 1}</span>
+                      </div>
+                  }
+                  {regenSelected.has(s.id) && (
+                    <div className="absolute top-1 right-1 w-4 h-4 bg-primary rounded-full flex items-center justify-center">
+                      <Check className="h-2.5 w-2.5 text-primary-foreground" />
+                    </div>
+                  )}
+                  <div className="absolute bottom-0 left-0 right-0 bg-black/40 text-[9px] text-white text-center py-0.5 pointer-events-none">
+                    {i + 1}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              size="sm"
+              className="text-xs w-full"
+              disabled={regenSelected.size === 0 || regenning}
+              onClick={startRegen}
+            >
+              {regenning
+                ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> regenerating…</>
+                : `regenerate ${regenSelected.size} slide${regenSelected.size !== 1 ? "s" : ""}`
+              }
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
