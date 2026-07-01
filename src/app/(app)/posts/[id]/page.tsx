@@ -121,7 +121,8 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
   const generatingSlides = new Set(
     (post?.slides ?? []).filter(s => !s.imageUrl).map(s => s.id)
   )
-  const isGeneratingImages = post?.status !== "done" && generatingSlides.size > 0
+  const isGeneratingImages = (post?.status === "generating" || post?.status === "captions_done") && generatingSlides.size > 0
+  const isCancelled = post?.status === "cancelled"
 
   function copyCaption(caption: string | null, hashtags: string | null) {
     const text = [caption, hashtags].filter(Boolean).join("\n\n")
@@ -248,6 +249,24 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
     setShowRegenPanel(true)
   }
 
+  function openRegenPanelForMissing() {
+    setRegenSelected(new Set(post?.slides.filter(s => !s.imageUrl).map(s => s.id) ?? []))
+    setShowRegenPanel(true)
+  }
+
+  async function handleCancel() {
+    if (!post) return
+    try {
+      const res = await fetch(`/api/posts/${id}/cancel`, { method: "POST" })
+      if (!res.ok) throw new Error("cancel failed")
+      const fresh = await getPost(id)
+      if (fresh) setPost(fresh)
+      toast.success("generation cancelled")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "cancel failed")
+    }
+  }
+
   async function startRegen() {
     if (!post || regenning || regenSelected.size === 0) return
     setRegenning(true)
@@ -298,7 +317,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
   )
 
   const currentSlide = post.slides?.[activeSlide]
-  const currentSlideGenerating = currentSlide ? generatingSlides.has(currentSlide.id) : false
+  const currentSlideGenerating = !isCancelled && (currentSlide ? generatingSlides.has(currentSlide.id) : false)
 
   return (
     <>
@@ -322,17 +341,44 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
             <Badge variant="outline" className="text-[10px]">{post.designStyle}</Badge>
             <Badge variant="outline" className="text-[10px]">{post.language}</Badge>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-xs h-8 gap-1.5"
-            onClick={openRegenPanel}
-            disabled={isGeneratingImages}
-          >
-            <RefreshCw className="h-3.5 w-3.5" /> regenerate
-          </Button>
+          {isGeneratingImages ? (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs h-8 gap-1.5 text-destructive hover:text-destructive"
+              onClick={handleCancel}
+            >
+              <X className="h-3.5 w-3.5" /> cancel
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs h-8 gap-1.5"
+              onClick={openRegenPanel}
+              disabled={isCancelled}
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> regenerate
+            </Button>
+          )}
         </div>
       </div>
+
+      {/* cancelled banner */}
+      {isCancelled && (
+        <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2.5 flex items-center justify-between gap-3">
+          <p className="text-xs text-destructive leading-relaxed">
+            <span className="font-medium">generation cancelled</span>
+            {" — "}{post.slides.filter(s => s.imageUrl).length} of {post.slides.length} slides completed
+          </p>
+          {post.slides.some(s => !s.imageUrl) && (
+            <Button size="sm" variant="outline" className="text-xs h-7 shrink-0 border-destructive/40 text-destructive hover:text-destructive"
+              onClick={openRegenPanelForMissing}>
+              complete missing
+            </Button>
+          )}
+        </div>
+      )}
 
       {/* image expiry warning for free/byok users */}
       {(plan === "free" || plan === "byok") && post.status === "done" && (
@@ -461,8 +507,10 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
 
               return (
                 <div className="text-center space-y-2">
-                  <ImageOff className="h-8 w-8 text-muted-foreground mx-auto" />
-                  <p className="text-xs text-muted-foreground">image unavailable</p>
+                  {isCancelled
+                    ? <><X className="h-8 w-8 text-destructive/50 mx-auto" /><p className="text-xs text-muted-foreground">cancelled</p></>
+                    : <><ImageOff className="h-8 w-8 text-muted-foreground mx-auto" /><p className="text-xs text-muted-foreground">image unavailable</p></>
+                  }
                 </div>
               )
             })()}

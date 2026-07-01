@@ -11,6 +11,7 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
 
   const postRow = await db.select().from(post).where(eq(post.id, slideRow.postId)).limit(1).then(r => r[0])
   if (!postRow || postRow.userId !== userId || !slideRow.imagePrompt) return null
+  if (postRow.status === "cancelled") return null
 
   const [settings, identityRow] = await Promise.all([
     db.select().from(userSettings).where(eq(userSettings.userId, userId)).limit(1).then(r => r[0] ?? null),
@@ -98,7 +99,10 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
   const allSlides = await db.select().from(slide).where(eq(slide.postId, slideRow.postId)).orderBy(asc(slide.createdAt))
   const allDone = allSlides.every(s => s.id === slideId ? true : s.imageUrl !== null)
   if (allDone) {
-    await db.update(post).set({ status: "done" }).where(eq(post.id, slideRow.postId))
+    const [latestPost] = await db.select({ status: post.status }).from(post).where(eq(post.id, slideRow.postId)).limit(1)
+    if (latestPost?.status !== "cancelled") {
+      await db.update(post).set({ status: "done" }).where(eq(post.id, slideRow.postId))
+    }
   }
 
   return imageUrl
