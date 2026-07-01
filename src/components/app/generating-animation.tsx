@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Sparkles } from "lucide-react"
+import { Sparkles, X, Minimize2 } from "lucide-react"
 
 const messages = [
   "reading your brief...",
@@ -26,7 +26,17 @@ const floatingShapes = [
 
 const paletteColors = ["#FF6B6B", "#00B4D8", "#52B788", "#C77DFF", "#FFD700"]
 
-export function GeneratingAnimation({ slideCount = 3 }: { slideCount?: number }) {
+export function GeneratingAnimation({
+  slideCount = 3,
+  onCancel,
+  onClose,
+  label,
+}: {
+  slideCount?: number
+  onCancel?: () => void
+  onClose?: () => void
+  label?: string
+}) {
   const [msgIndex, setMsgIndex] = useState(0)
 
   useEffect(() => {
@@ -36,6 +46,16 @@ export function GeneratingAnimation({ slideCount = 3 }: { slideCount?: number })
 
   return (
     <div className="fixed inset-0 z-50 bg-background/97 backdrop-blur-sm flex flex-col items-center justify-center overflow-hidden select-none">
+
+      {/* close (keep generating in background) */}
+      {onClose && (
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 z-10 flex items-center gap-1.5 rounded-full border border-border/60 bg-card/80 px-3 py-1.5 text-[11px] text-muted-foreground hover:text-foreground hover:border-border transition-colors"
+        >
+          <Minimize2 className="h-3 w-3" /> keep in background
+        </button>
+      )}
 
       {/* floating particles */}
       {floatingShapes.map((s, i) => (
@@ -192,7 +212,7 @@ export function GeneratingAnimation({ slideCount = 3 }: { slideCount?: number })
         className="text-sm font-medium text-foreground/80 mb-4"
         style={{ animation: "cc-fade-up 0.3s ease both" }}
       >
-        {messages[msgIndex]}
+        {label ?? messages[msgIndex]}
       </p>
 
       {/* animated bars */}
@@ -209,6 +229,28 @@ export function GeneratingAnimation({ slideCount = 3 }: { slideCount?: number })
           />
         ))}
       </div>
+
+      {/* actions */}
+      {(onCancel || onClose) && (
+        <div className="mt-8 flex items-center gap-2">
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="rounded-lg border border-border/60 bg-card px-4 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-border transition-colors"
+            >
+              hide & keep working
+            </button>
+          )}
+          {onCancel && (
+            <button
+              onClick={onCancel}
+              className="flex items-center gap-1.5 rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-2 text-xs font-medium text-destructive hover:bg-destructive/10 transition-colors"
+            >
+              <X className="h-3.5 w-3.5" /> cancel
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

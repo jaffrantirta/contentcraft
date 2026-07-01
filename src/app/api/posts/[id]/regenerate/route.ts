@@ -13,7 +13,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
 
   const { id: postId } = await params
-  const { slideIds } = await req.json() as { slideIds: string[] }
+  const { slideIds, vibe, designStyle, colorPalette, revisionPrompt } = await req.json() as {
+    slideIds: string[]
+    vibe?: string
+    designStyle?: string
+    colorPalette?: string[]
+    revisionPrompt?: string
+  }
 
   if (!Array.isArray(slideIds) || slideIds.length === 0) {
     return NextResponse.json({ error: "slideIds required" }, { status: 400 })
@@ -41,16 +47,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     oldImages[s.id] = s.imageUrl
   }
 
+  // Apply any style overrides to the post so the new images reflect them (and persist for future views).
+  const postUpdate: Record<string, unknown> = { status: "generating" }
+  if (typeof vibe === "string" && vibe) postUpdate.vibe = vibe
+  if (typeof designStyle === "string" && designStyle) postUpdate.designStyle = designStyle
+  if (Array.isArray(colorPalette) && colorPalette.length) postUpdate.colorPalette = colorPalette
+
   await Promise.all(
     slides.map(s => db.update(slide).set({ imageUrl: null }).where(eq(slide.id, s.id)))
   )
-  await db.update(post).set({ status: "generating" }).where(eq(post.id, postId))
+  await db.update(post).set(postUpdate).where(eq(post.id, postId))
 
   const userId = session.user.id
+  const revisionNote = typeof revisionPrompt === "string" ? revisionPrompt.trim() : ""
   after(async () => {
     await Promise.all(
       slides.map(s =>
-        generateSlideImage(s.id, userId).catch(err =>
+        generateSlideImage(s.id, userId, revisionNote ? { revisionNote } : undefined).catch(err =>
           console.error(`[regenerate] slide ${s.id} failed:`, err instanceof Error ? err.message : err)
         )
       )

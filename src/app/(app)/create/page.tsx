@@ -8,13 +8,12 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import { VIBES, COLOR_PALETTES, ASPECT_RATIOS, DESIGN_STYLES, TEXT_POSITIONS, TYPOGRAPHY_STYLES } from "@/lib/tokenrouter"
-import { Sparkles, Loader2, User, UserX, FileText, Lightbulb, AlignLeft, AlignCenter, AlignRight, Upload, X } from "lucide-react"
+import { Sparkles, Loader2, User, UserX, FileText, Lightbulb, AlignLeft, AlignCenter, AlignRight, Upload, X, Palette } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { GeneratingAnimation } from "@/components/app/generating-animation"
 
 type AspectRatioId = typeof ASPECT_RATIOS[number]["id"]
 type VibeId = typeof VIBES[number]["id"]
-type PaletteId = typeof COLOR_PALETTES[number]["id"]
+type PaletteId = typeof COLOR_PALETTES[number]["id"] | "custom"
 type StyleId = typeof DESIGN_STYLES[number]["id"]
 type TextPositionId = typeof TEXT_POSITIONS[number]["id"]
 type TypographyId = typeof TYPOGRAPHY_STYLES[number]["id"]
@@ -30,6 +29,7 @@ interface FormState {
   vibe: VibeId
   designStyle: StyleId
   colorPalette: PaletteId
+  customColors: string[]
   textPosition: TextPositionId
   typographyStyle: TypographyId
 }
@@ -53,6 +53,7 @@ export default function CreatePage() {
     vibe: "professional",
     designStyle: "realistic",
     colorPalette: "ocean",
+    customColors: ["#6C5CE7", "#00B4D8", "#FFD166"],
     textPosition: "auto",
     typographyStyle: "auto",
   })
@@ -121,7 +122,9 @@ export default function CreatePage() {
     }
     setLoading(true)
     try {
-      const selectedPalette = COLOR_PALETTES.find(p => p.id === form.colorPalette)
+      const colors = form.colorPalette === "custom"
+        ? form.customColors.filter(Boolean)
+        : (COLOR_PALETTES.find(p => p.id === form.colorPalette)?.colors ?? [])
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -135,7 +138,7 @@ export default function CreatePage() {
           withSubject: form.withSubject,
           vibe: form.vibe,
           designStyle: form.designStyle,
-          colorPalette: selectedPalette?.colors || [],
+          colorPalette: colors,
           textPosition: form.textPosition,
           typographyStyle: form.typographyStyle,
           subjectImageUrl: subjectImageUrl || null,
@@ -152,11 +155,10 @@ export default function CreatePage() {
       if (!res.ok) throw new Error("generation failed")
 
       const data = await res.json()
-      toast.success("content generated!")
+      // Redirect immediately — the post page shows one continuous generation animation.
       router.push(`/posts/${data.postId}`)
     } catch {
       toast.error("something went wrong. please try again.")
-    } finally {
       setLoading(false)
     }
   }
@@ -165,7 +167,6 @@ export default function CreatePage() {
 
   return (
     <>
-    {loading && <GeneratingAnimation slideCount={form.slideCount} />}
     <div className="max-w-2xl space-y-6 md:space-y-8 pb-24">
       <div>
         <h1 className="text-xl md:text-2xl font-bold tracking-tight">create new post</h1>
@@ -529,7 +530,64 @@ export default function CreatePage() {
               <p className="text-[10px] text-left font-medium">{p.name}</p>
             </button>
           ))}
+
+          {/* custom palette */}
+          <button
+            onClick={() => set("colorPalette", "custom")}
+            className={cn(
+              "p-3 rounded-lg border transition-colors",
+              form.colorPalette === "custom"
+                ? "border-primary bg-primary/5"
+                : "border-border/60 hover:border-border bg-card"
+            )}
+          >
+            <div className="flex gap-1 mb-2">
+              {form.customColors.map((c, i) => (
+                <div key={i} className="flex-1 h-4 rounded-sm border border-border/40" style={{ backgroundColor: c }} />
+              ))}
+            </div>
+            <p className="text-[10px] text-left font-medium flex items-center gap-1">
+              <Palette className="h-3 w-3" /> custom
+            </p>
+          </button>
         </div>
+
+        {/* custom color pickers */}
+        {form.colorPalette === "custom" && (
+          <div className="rounded-lg border border-border/60 bg-card p-3 space-y-2.5">
+            <p className="text-[10px] text-muted-foreground">pick your own colors — ai will design around them</p>
+            <div className="grid grid-cols-3 gap-2">
+              {form.customColors.map((c, i) => (
+                <div key={i} className="space-y-1.5">
+                  <label className="relative block h-12 rounded-lg overflow-hidden border border-border/60 cursor-pointer">
+                    <span className="absolute inset-0" style={{ backgroundColor: c }} />
+                    <input
+                      type="color"
+                      value={c}
+                      onChange={e => {
+                        const next = [...form.customColors]
+                        next[i] = e.target.value
+                        set("customColors", next)
+                      }}
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                    />
+                  </label>
+                  <input
+                    type="text"
+                    value={c}
+                    onChange={e => {
+                      const next = [...form.customColors]
+                      next[i] = e.target.value
+                      set("customColors", next)
+                    }}
+                    className="w-full text-[10px] font-mono text-center rounded border border-border/60 bg-background py-1 uppercase"
+                    maxLength={7}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
 
@@ -539,7 +597,7 @@ export default function CreatePage() {
           {form.slideCount} slide{form.slideCount > 1 ? "s" : ""} · {form.language === "id" ? "indonesian" : "english"} · {form.inputMode === "text_ready" ? "text ready" : "raw brief"}
         </p>
         <Button onClick={handleGenerate} disabled={loading || !form.brief.trim()} size="lg" className="text-sm min-w-36">
-          {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />generating...</> : <><Sparkles className="h-4 w-4 mr-2" />generate</>}
+          {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />starting...</> : <><Sparkles className="h-4 w-4 mr-2" />generate</>}
         </Button>
       </div>
 
@@ -550,7 +608,7 @@ export default function CreatePage() {
             {form.slideCount} slides · {form.language} · {form.inputMode === "text_ready" ? "text ready" : "raw brief"}
           </p>
           <Button onClick={handleGenerate} disabled={loading || !form.brief.trim()} className="text-sm h-10 px-6">
-            {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />generating...</> : <><Sparkles className="h-4 w-4 mr-2" />generate</>}
+            {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />starting...</> : <><Sparkles className="h-4 w-4 mr-2" />generate</>}
           </Button>
         </div>
       </div>

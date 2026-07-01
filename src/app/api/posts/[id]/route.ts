@@ -24,7 +24,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       .select()
       .from(slide)
       .where(eq(slide.postId, id))
-      .orderBy(asc(slide.createdAt))
+      .orderBy(asc(slide.order))
 
     return NextResponse.json({ ...postRow, slides })
   } catch (err) {

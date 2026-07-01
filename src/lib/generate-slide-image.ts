@@ -5,7 +5,11 @@ import { uploadFile, storageEnabled } from "@/lib/storage"
 import { eq, asc } from "drizzle-orm"
 import { v4 as uuidv4 } from "uuid"
 
-export async function generateSlideImage(slideId: string, userId: string): Promise<string | null> {
+export async function generateSlideImage(
+  slideId: string,
+  userId: string,
+  opts?: { revisionNote?: string },
+): Promise<string | null> {
   const slideRow = await db.select().from(slide).where(eq(slide.id, slideId)).limit(1).then(r => r[0])
   if (!slideRow) return null
 
@@ -56,20 +60,49 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
   }
   const typographyHint = typographyHints[postRow.typographyStyle ?? ""] ?? ""
 
+  // Design-style keyword hint, so that changing the style on regenerate actually changes the look.
+  const styleKeywords: Record<string, string> = {
+    realistic:    "Rendering: photorealistic DSLR photo, sharp focus, natural lighting.",
+    illustration: "Rendering: editorial illustration, vector-style, clean linework.",
+    "3d":         "Rendering: 3D render, octane render, glossy materials, depth of field.",
+    flat:         "Rendering: flat design, geometric shapes, bold colors, no shadows.",
+    anime:        "Rendering: anime style, cel shading, clean lineart, vibrant colors.",
+    watercolor:   "Rendering: watercolor painting, soft edges, paper texture.",
+    abstract:     "Rendering: abstract art, expressionist brushstrokes, textured layers.",
+    minimal:      "Rendering: minimalist, lots of negative space, ultra-clean.",
+  }
+  const styleHint = styleKeywords[postRow.designStyle ?? ""] ?? ""
+  const vibeHint = postRow.vibe ? `Overall mood/vibe: ${postRow.vibe}.` : ""
+  const colorHint = Array.isArray(postRow.colorPalette) && postRow.colorPalette.length
+    ? `Color palette to build the design around: ${postRow.colorPalette.join(", ")}.`
+    : ""
+  // Minor-revision instruction from the regenerate dialog (e.g. "remove the word SALE").
+  const revisionHint = opts?.revisionNote?.trim()
+    ? `IMPORTANT revision request — apply this change precisely: ${opts.revisionNote.trim()}`
+    : ""
+
   let fullPrompt: string
   if (hasCaption) {
     fullPrompt = [
       "Create a complete, professional social media carousel slide graphic.",
       `Slide text (must appear clearly and prominently in the design): "${slideRow.caption}"`,
       `Visual concept: ${slideRow.imagePrompt}`,
+      styleHint,
+      vibeHint,
+      colorHint,
       textAlignHint,
       typographyHint,
+      revisionHint,
       logoZone,
       "High quality, eye-catching, Instagram-ready. Full bleed — no empty bars or borders.",
     ].filter(Boolean).join(" ")
   } else {
     fullPrompt = [
       slideRow.imagePrompt,
+      styleHint,
+      vibeHint,
+      colorHint,
+      revisionHint,
       logoZone,
       "No text or words in the image. Full bleed — no empty bars or borders.",
     ].filter(Boolean).join(" ")

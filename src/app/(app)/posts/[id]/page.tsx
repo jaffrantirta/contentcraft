@@ -7,10 +7,13 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
-import { ArrowLeft, Check, Copy, Download, ImageOff, Loader2, RefreshCw, X } from "lucide-react"
+import { ArrowLeft, Check, ChevronDown, Copy, Download, ImageOff, Loader2, RefreshCw, X } from "lucide-react"
 import Link from "next/link"
 import { GeneratingAnimation } from "@/components/app/generating-animation"
+import { VIBES, DESIGN_STYLES } from "@/lib/tokenrouter"
 import { cn } from "@/lib/utils"
 
 interface Slide {
@@ -51,6 +54,24 @@ interface Identity {
   activeFooterImageUrl: string | null
 }
 
+function statusDotClass(status: string): string {
+  switch (status) {
+    case "done":       return "bg-green-500"
+    case "error":      return "bg-destructive"
+    case "cancelled":  return "bg-muted-foreground"
+    default:           return "bg-primary animate-pulse" // generating / captions_done
+  }
+}
+
+function statusBadgeClass(status: string): string {
+  switch (status) {
+    case "done":       return "border-green-500/40 text-green-600 dark:text-green-400"
+    case "error":      return "border-destructive/40 text-destructive"
+    case "cancelled":  return "border-border text-muted-foreground"
+    default:           return "border-primary/40 text-primary"
+  }
+}
+
 function logoOverlayClass(position: LogoPosition): string {
   switch (position) {
     case "top-left":    return "top-2 left-2 justify-start"
@@ -84,7 +105,12 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
   const [showRegenPanel, setShowRegenPanel] = useState(false)
   const [regenSelected, setRegenSelected] = useState<Set<string>>(new Set())
   const [regenning, setRegenning] = useState(false)
+  const [regenVibe, setRegenVibe] = useState<string>("professional")
+  const [regenStyle, setRegenStyle] = useState<string>("realistic")
+  const [regenRevision, setRegenRevision] = useState("")
   const [prevImages, setPrevImages] = useState<Record<string, string>>({})
+  const [overlayDismissed, setOverlayDismissed] = useState(false)
+  const [promptOpen, setPromptOpen] = useState(false)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -121,8 +147,14 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
   const generatingSlides = new Set(
     (post?.slides ?? []).filter(s => !s.imageUrl).map(s => s.id)
   )
-  const isGeneratingImages = (post?.status === "generating" || post?.status === "captions_done") && generatingSlides.size > 0
+  const isWorking = post?.status === "generating" || post?.status === "captions_done"
+  const noSlidesYet = (post?.slides.length ?? 0) === 0
+  // "writing captions" (no slides yet) OR "generating images" (slides exist but images pending)
+  const isGeneratingImages = !!isWorking && (noSlidesYet || generatingSlides.size > 0)
   const isCancelled = post?.status === "cancelled"
+  const hasComparison = Object.keys(prevImages).length > 0
+  // Full-screen overlay only for the initial generation — regenerate uses the inline before/after view.
+  const showOverlay = isGeneratingImages && !overlayDismissed && !hasComparison
 
   function copyCaption(caption: string | null, hashtags: string | null) {
     const text = [caption, hashtags].filter(Boolean).join("\n\n")
@@ -244,12 +276,20 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
     }
   }, [identity, post])
 
+  function seedRegenOptions() {
+    setRegenVibe(post?.vibe ?? "professional")
+    setRegenStyle(post?.designStyle ?? "realistic")
+    setRegenRevision("")
+  }
+
   function openRegenPanel() {
+    seedRegenOptions()
     setRegenSelected(new Set(post?.slides.map(s => s.id) ?? []))
     setShowRegenPanel(true)
   }
 
   function openRegenPanelForMissing() {
+    seedRegenOptions()
     setRegenSelected(new Set(post?.slides.filter(s => !s.imageUrl).map(s => s.id) ?? []))
     setShowRegenPanel(true)
   }
@@ -274,7 +314,12 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
       const res = await fetch(`/api/posts/${id}/regenerate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slideIds: Array.from(regenSelected) }),
+        body: JSON.stringify({
+          slideIds: Array.from(regenSelected),
+          vibe: regenVibe,
+          designStyle: regenStyle,
+          revisionPrompt: regenRevision.trim() || undefined,
+        }),
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
@@ -321,7 +366,14 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
 
   return (
     <>
-      {isGeneratingImages && <GeneratingAnimation slideCount={post.slideCount} />}
+      {showOverlay && (
+        <GeneratingAnimation
+          slideCount={post.slideCount}
+          onCancel={handleCancel}
+          onClose={() => setOverlayDismissed(true)}
+          label={noSlidesYet ? "writing your captions…" : undefined}
+        />
+      )}
       <div className="space-y-4 md:space-y-6 max-w-5xl pb-8">
       {/* header */}
       <div className="flex items-center gap-3">
@@ -336,7 +388,10 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <div className="hidden sm:flex items-center gap-2">
-            <Badge variant="secondary" className="text-[10px]">{post.status}</Badge>
+            <Badge variant="outline" className={cn("text-[10px] gap-1.5", statusBadgeClass(post.status))}>
+              <span className={cn("w-1.5 h-1.5 rounded-full", statusDotClass(post.status))} />
+              {post.status === "captions_done" ? "generating" : post.status}
+            </Badge>
             <Badge variant="outline" className="text-[10px]">{post.vibe}</Badge>
             <Badge variant="outline" className="text-[10px]">{post.designStyle}</Badge>
             <Badge variant="outline" className="text-[10px]">{post.language}</Badge>
@@ -404,6 +459,18 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
               "aspect-square"
             )}>
             {(() => {
+              // captions still being written — no slides exist yet
+              if (noSlidesYet && isWorking) {
+                return (
+                  <div className="w-full h-full bg-muted animate-pulse flex items-center justify-center">
+                    <div className="text-center space-y-2">
+                      <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin mx-auto" />
+                      <p className="text-xs text-muted-foreground">writing captions…</p>
+                    </div>
+                  </div>
+                )
+              }
+
               const oldUrl = currentSlide ? prevImages[currentSlide.id] : undefined
               const isComparing = !!oldUrl
 
@@ -612,45 +679,42 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                 </span>
               )}
             </p>
-            {post.captionMode !== "none" && (
-              <h2 className="text-sm font-semibold">
-                {post.captionMode === "single" ? "caption" : "caption"}
-              </h2>
-            )}
+            <h2 className="text-sm font-semibold">caption</h2>
           </div>
 
-          {post.captionMode === "none" ? (
-            <p className="text-xs text-muted-foreground">no caption — pure visual slides</p>
-          ) : (
-            <Card className="p-4 space-y-3">
-              {post.captionMode === "single" && (
-                <p className="text-[10px] text-muted-foreground">single caption (same for all slides)</p>
-              )}
-              <p className="text-sm leading-relaxed">{currentSlide?.caption || "—"}</p>
-              {currentSlide?.hashtags && (
-                <>
-                  <Separator />
-                  <p className="text-xs text-muted-foreground font-mono">{currentSlide.hashtags}</p>
-                </>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                className="text-xs h-8 gap-2 w-full"
-                onClick={() => copyCaption(currentSlide?.caption || null, currentSlide?.hashtags || null)}
-              >
-                <Copy className="h-3.5 w-3.5" />
-                copy caption + hashtags
-              </Button>
-            </Card>
-          )}
+          <Card className="p-4 space-y-3">
+            <p className="text-sm leading-relaxed">{currentSlide?.caption || "—"}</p>
+            {currentSlide?.hashtags && (
+              <>
+                <Separator />
+                <p className="text-xs text-muted-foreground font-mono">{currentSlide.hashtags}</p>
+              </>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs h-8 gap-2 w-full"
+              onClick={() => copyCaption(currentSlide?.caption || null, currentSlide?.hashtags || null)}
+            >
+              <Copy className="h-3.5 w-3.5" />
+              copy caption + hashtags
+            </Button>
+          </Card>
 
           {currentSlide?.imagePrompt && (
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">image prompt used</p>
-              <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3 leading-relaxed">
-                {currentSlide.imagePrompt}
-              </p>
+            <div className="rounded-lg border border-border/60 bg-muted/30 overflow-hidden">
+              <button
+                onClick={() => setPromptOpen(o => !o)}
+                className="w-full flex items-center justify-between px-3 py-2.5 text-left hover:bg-muted/50 transition-colors"
+              >
+                <span className="text-xs font-medium text-muted-foreground">image prompt used</span>
+                <ChevronDown className={cn("h-3.5 w-3.5 text-muted-foreground transition-transform", promptOpen && "rotate-180")} />
+              </button>
+              {promptOpen && (
+                <p className="text-xs text-muted-foreground px-3 pb-3 leading-relaxed border-t border-border/40 pt-2.5">
+                  {currentSlide.imagePrompt}
+                </p>
+              )}
             </div>
           )}
 
@@ -687,69 +751,125 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
 
       {/* regenerate panel */}
       <Dialog open={showRegenPanel} onOpenChange={setShowRegenPanel}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>select slides to regenerate</DialogTitle>
+            <DialogTitle>regenerate slides</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-3 py-1">
-            <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">
-                {regenSelected.size} of {post.slides.length} selected
-              </p>
-              <button
-                className="text-xs text-primary hover:underline"
-                onClick={() =>
-                  setRegenSelected(
-                    regenSelected.size === post.slides.length
-                      ? new Set()
-                      : new Set(post.slides.map(s => s.id))
-                  )
-                }
-              >
-                {regenSelected.size === post.slides.length ? "deselect all" : "select all"}
-              </button>
+          <div className="space-y-5 py-1 max-h-[60vh] overflow-y-auto pr-1">
+            {/* slide selection */}
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium">slides</Label>
+                <button
+                  className="text-[11px] text-primary hover:underline"
+                  onClick={() =>
+                    setRegenSelected(
+                      regenSelected.size === post.slides.length
+                        ? new Set()
+                        : new Set(post.slides.map(s => s.id))
+                    )
+                  }
+                >
+                  {regenSelected.size === post.slides.length ? "deselect all" : "select all"}
+                </button>
+              </div>
+
+              <div className={cn(
+                "grid gap-2",
+                post.slides.length <= 3 ? "grid-cols-3" : "grid-cols-4"
+              )}>
+                {post.slides.map((s, i) => (
+                  <button
+                    key={s.id}
+                    onClick={() =>
+                      setRegenSelected(prev => {
+                        const n = new Set(prev)
+                        if (n.has(s.id)) n.delete(s.id); else n.add(s.id)
+                        return n
+                      })
+                    }
+                    className={cn(
+                      "relative rounded-lg overflow-hidden border-2 transition-colors",
+                      post.aspectRatio === "16:9" ? "aspect-video" :
+                      post.aspectRatio === "4:5"  ? "aspect-[4/5]" :
+                      post.aspectRatio === "9:16" ? "aspect-[9/16]" : "aspect-square",
+                      regenSelected.has(s.id) ? "border-primary" : "border-border/40 hover:border-border"
+                    )}
+                  >
+                    {s.imageUrl
+                      // eslint-disable-next-line @next/next/no-img-element
+                      ? <img src={s.imageUrl} alt="" className="w-full h-full object-cover" />
+                      : <div className="w-full h-full bg-muted flex items-center justify-center">
+                          <span className="text-[10px] text-muted-foreground">{i + 1}</span>
+                        </div>
+                    }
+                    {regenSelected.has(s.id) && (
+                      <div className="absolute top-1 right-1 w-4 h-4 bg-primary rounded-full flex items-center justify-center">
+                        <Check className="h-2.5 w-2.5 text-primary-foreground" />
+                      </div>
+                    )}
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/40 text-[9px] text-white text-center py-0.5 pointer-events-none">
+                      {i + 1}
+                    </div>
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className={cn(
-              "grid gap-2",
-              post.slides.length <= 3 ? "grid-cols-3" : "grid-cols-4"
-            )}>
-              {post.slides.map((s, i) => (
-                <button
-                  key={s.id}
-                  onClick={() =>
-                    setRegenSelected(prev => {
-                      const n = new Set(prev)
-                      if (n.has(s.id)) n.delete(s.id); else n.add(s.id)
-                      return n
-                    })
-                  }
-                  className={cn(
-                    "relative rounded-lg overflow-hidden border-2 transition-colors",
-                    post.aspectRatio === "16:9" ? "aspect-video" :
-                    post.aspectRatio === "4:5"  ? "aspect-[4/5]" :
-                    post.aspectRatio === "9:16" ? "aspect-[9/16]" : "aspect-square",
-                    regenSelected.has(s.id) ? "border-primary" : "border-border/40 hover:border-border"
-                  )}
-                >
-                  {s.imageUrl
-                    // eslint-disable-next-line @next/next/no-img-element
-                    ? <img src={s.imageUrl} alt="" className="w-full h-full object-cover" />
-                    : <div className="w-full h-full bg-muted flex items-center justify-center">
-                        <span className="text-[10px] text-muted-foreground">{i + 1}</span>
-                      </div>
-                  }
-                  {regenSelected.has(s.id) && (
-                    <div className="absolute top-1 right-1 w-4 h-4 bg-primary rounded-full flex items-center justify-center">
-                      <Check className="h-2.5 w-2.5 text-primary-foreground" />
-                    </div>
-                  )}
-                  <div className="absolute bottom-0 left-0 right-0 bg-black/40 text-[9px] text-white text-center py-0.5 pointer-events-none">
-                    {i + 1}
-                  </div>
-                </button>
-              ))}
+            {/* vibe override */}
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">vibe</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {VIBES.map(v => (
+                  <button
+                    key={v.id}
+                    onClick={() => setRegenVibe(v.id)}
+                    className={cn(
+                      "px-2.5 py-1.5 rounded-lg border text-[11px] transition-colors",
+                      regenVibe === v.id
+                        ? "border-primary bg-primary/5 font-medium"
+                        : "border-border/60 hover:border-border bg-card text-muted-foreground"
+                    )}
+                  >
+                    {v.emoji} {v.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* style override */}
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">design style</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {DESIGN_STYLES.map(sOpt => (
+                  <button
+                    key={sOpt.id}
+                    onClick={() => setRegenStyle(sOpt.id)}
+                    className={cn(
+                      "px-2.5 py-1.5 rounded-lg border text-[11px] transition-colors",
+                      regenStyle === sOpt.id
+                        ? "border-primary bg-primary/5 font-medium"
+                        : "border-border/60 hover:border-border bg-card text-muted-foreground"
+                    )}
+                  >
+                    {sOpt.emoji} {sOpt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* revision note */}
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">minor revision <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Textarea
+                placeholder='e.g. "remove the word SALE", "make the background darker", "use a bigger headline"'
+                className="min-h-16 text-xs resize-none"
+                value={regenRevision}
+                onChange={e => setRegenRevision(e.target.value)}
+                maxLength={300}
+              />
+              <p className="text-[10px] text-muted-foreground">the ai applies this tweak to the selected slides on regenerate</p>
             </div>
           </div>
 

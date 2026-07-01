@@ -61,10 +61,14 @@ export async function POST(req: NextRequest) {
   )
   const chatModel = (isByok && settings?.byokChatModel) ? settings.byokChatModel : DEFAULT_CHAT_MODEL
 
+  // Create the post immediately so we can redirect to /posts/[id] right away.
+  // Caption + image generation both run in after(), producing a single continuous
+  // loading experience on the post detail page (no double animation).
   const postId = uuidv4()
   await db.insert(post).values({
     id: postId,
     userId,
+    title: String(brief).slice(0, 80),
     brief,
     aspectRatio: aspectRatio || "1:1",
     language: language || "id",
@@ -134,18 +138,19 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  let slidesData: Array<{ caption: string; hashtags: string; imagePrompt: string }> = []
+  // Everything below runs in the background after the response is sent.
+  after(async () => {
+    let slidesData: Array<{ caption: string; hashtags: string; imagePrompt: string }> = []
 
-  try {
-    if (inputMode === "text_ready") {
-      // User wrote the exact text — only generate imagePrompts, one call per slide
-      console.log(`[generate] text_ready mode: ${count} slides, generating image prompts only`)
-      const briefs = Array.isArray(slideBriefs) ? slideBriefs.slice(0, count) : []
+    try {
+      if (inputMode === "text_ready") {
+        console.log(`[generate] text_ready mode: ${count} slides, generating image prompts only`)
+        const briefs = Array.isArray(slideBriefs) ? slideBriefs.slice(0, count) : []
 
-      slidesData = await Promise.all(
-        Array.from({ length: count }, async (_, i) => {
-          const slideText = briefs[i]?.trim() || ""
-          const prompt = `You are a visual designer. Create an image concept for a social media slide.
+        slidesData = await Promise.all(
+          Array.from({ length: count }, async (_, i) => {
+            const slideText = briefs[i]?.trim() || ""
+            const prompt = `You are a visual designer. Create an image concept for a social media slide.
 
 The slide already has this exact text: "${slideText}"
 Overall context: ${brief}
@@ -160,26 +165,25 @@ ${imagePromptRule}
 
 Respond ONLY with valid JSON.`
 
-          const raw = await callChat(prompt)
-          const parsed = JSON.parse(raw)
-          return {
-            caption: slideText,
-            hashtags: parsed.hashtags || "",
-            imagePrompt: parsed.imagePrompt || "",
-          }
-        })
-      )
-      console.log(`[generate] text_ready prompts done: ${slidesData.length} slides`)
+            const raw = await callChat(prompt)
+            const parsed = JSON.parse(raw)
+            return {
+              caption: slideText,
+              hashtags: parsed.hashtags || "",
+              imagePrompt: parsed.imagePrompt || "",
+            }
+          })
+        )
+        console.log(`[generate] text_ready prompts done: ${slidesData.length} slides`)
 
-    } else {
-      // raw_brief — AI writes caption + imagePrompt for each slide from the brief
-      console.log(`[generate] raw_brief mode: ${count} slides, generating content in parallel`)
-      const briefs = Array.isArray(slideBriefs) ? slideBriefs.slice(0, count) : []
+      } else {
+        console.log(`[generate] raw_brief mode: ${count} slides, generating content in parallel`)
+        const briefs = Array.isArray(slideBriefs) ? slideBriefs.slice(0, count) : []
 
-      slidesData = await Promise.all(
-        Array.from({ length: count }, async (_, i) => {
-          const slideBrief = briefs[i]?.trim() || brief
-          const prompt = `You are a social media content writer. Write content for slide ${i + 1} of a ${count}-slide carousel.
+        slidesData = await Promise.all(
+          Array.from({ length: count }, async (_, i) => {
+            const slideBrief = briefs[i]?.trim() || brief
+            const prompt = `You are a social media content writer. Write content for slide ${i + 1} of a ${count}-slide carousel.
 
 This slide's topic: ${slideBrief}
 General context: ${brief}
@@ -195,31 +199,33 @@ ${imagePromptRule}
 
 Respond ONLY with valid JSON.`
 
-          const raw = await callChat(prompt)
-          const parsed = JSON.parse(raw)
-          return {
-            caption: parsed.caption || "",
-            hashtags: parsed.hashtags || "",
-            imagePrompt: parsed.imagePrompt || "",
-          }
-        })
-      )
-      console.log(`[generate] raw_brief generation done: ${slidesData.length} slides`)
+            const raw = await callChat(prompt)
+            const parsed = JSON.parse(raw)
+            return {
+              caption: parsed.caption || "",
+              hashtags: parsed.hashtags || "",
+              imagePrompt: parsed.imagePrompt || "",
+            }
+          })
+        )
+        console.log(`[generate] raw_brief generation done: ${slidesData.length} slides`)
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error("[generate] caption generation failed:", msg)
+      await db.update(post).set({ status: "error", errorMessage: `generation failed: ${msg}` }).where(eq(post.id, postId))
+      return
     }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
-    console.error("[generate] generation failed:", msg)
-    await db.update(post).set({ status: "error", errorMessage: `generation failed: ${msg}` }).where(eq(post.id, postId))
-    return NextResponse.json({ error: "generation failed", detail: msg }, { status: 500 })
-  }
 
-  if (!slidesData.length) {
-    await db.update(post).set({ status: "error", errorMessage: "no slides returned from AI" }).where(eq(post.id, postId))
-    return NextResponse.json({ error: "no slides data returned" }, { status: 500 })
-  }
+    if (!slidesData.length) {
+      await db.update(post).set({ status: "error", errorMessage: "no slides returned from AI" }).where(eq(post.id, postId))
+      return
+    }
 
-  const slideRecords = await Promise.all(
-    slidesData.slice(0, count).map(async (s, i) => {
+    // Insert slides sequentially so `order` maps cleanly (slide 1 = user's first brief, etc.)
+    const slideRecords: Array<{ id: string; order: number }> = []
+    for (let i = 0; i < slidesData.slice(0, count).length; i++) {
+      const s = slidesData[i]
       const slideId = uuidv4()
       await db.insert(slide).values({
         id: slideId,
@@ -230,21 +236,27 @@ Respond ONLY with valid JSON.`
         caption: s.caption,
         hashtags: s.hashtags,
       })
-      return { id: slideId, order: i, imagePrompt: s.imagePrompt, caption: s.caption, hashtags: s.hashtags }
-    })
-  )
-
-  await db.update(post).set({ status: "captions_done", title: brief.slice(0, 80) }).where(eq(post.id, postId))
-
-  if (!settings || settings.plan === "free") {
-    if (settings) {
-      await db.update(userSettings).set({ freeGenerationsUsed: (settings.freeGenerationsUsed || 0) + 1 }).where(eq(userSettings.userId, userId))
-    } else {
-      await db.insert(userSettings).values({ id: uuidv4(), userId, freeGenerationsUsed: 1 })
+      slideRecords.push({ id: slideId, order: i })
     }
-  }
 
-  after(async () => {
+    // Bail out if the user cancelled while captions were being written.
+    const [afterCaptions] = await db.select({ status: post.status }).from(post).where(eq(post.id, postId)).limit(1)
+    if (afterCaptions?.status === "cancelled") {
+      console.log(`[generate] post ${postId} cancelled before image generation`)
+      return
+    }
+
+    await db.update(post).set({ status: "captions_done" }).where(eq(post.id, postId))
+
+    // Consume the free-plan quota only once captions succeed.
+    if (!settings || settings.plan === "free") {
+      if (settings) {
+        await db.update(userSettings).set({ freeGenerationsUsed: (settings.freeGenerationsUsed || 0) + 1 }).where(eq(userSettings.userId, userId))
+      } else {
+        await db.insert(userSettings).values({ id: uuidv4(), userId, freeGenerationsUsed: 1 })
+      }
+    }
+
     console.log(`[generate] background image generation for post ${postId} (${slideRecords.length} slides)`)
     await Promise.all(
       slideRecords.map(s =>
@@ -256,5 +268,5 @@ Respond ONLY with valid JSON.`
     console.log(`[generate] image generation done for post ${postId}`)
   })
 
-  return NextResponse.json({ postId, slides: slideRecords })
+  return NextResponse.json({ postId })
 }
