@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { ArrowRight, Sparkles, ImageIcon, Languages, Palette, Layers, Star, Zap, Lock } from "lucide-react"
+import { VIBES } from "@/lib/tokenrouter"
 
 const features = [
   { icon: Sparkles, title: "ai-powered briefs", desc: "just describe your idea — ai handles the rest" },
@@ -12,8 +13,6 @@ const features = [
   { icon: Layers, title: "ratio-ready formats", desc: "square, portrait, story, landscape — all covered" },
   { icon: Lock, title: "bring your own key", desc: "use your own api key for unlimited generation" },
 ]
-
-const vibes = ["fun 🎉", "chill 😌", "shock ⚡", "professional 💼", "aesthetic ✨", "dark 🖤", "warm 🧡", "minimal ◻️"]
 
 const plans = [
   {
@@ -93,8 +92,10 @@ export default function LandingPage() {
       <section className="py-8 border-y border-border/40 overflow-hidden">
         <div className="flex gap-4 animate-none">
           <div className="flex gap-4 px-6 flex-wrap justify-center max-w-5xl mx-auto">
-            {vibes.map((v) => (
-              <Badge key={v} variant="outline" className="text-xs px-3 py-1.5 font-normal">{v}</Badge>
+            {VIBES.map((v) => (
+              <Badge key={v.id} variant="outline" className="text-xs px-3 py-1.5 font-normal gap-1.5">
+                <v.icon className="h-3.5 w-3.5" />{v.label}
+              </Badge>
             ))}
           </div>
         </div>

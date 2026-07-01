@@ -61,7 +61,7 @@ export default function BillingPage() {
       if (window.snap && data.token) {
         window.snap.pay(data.token, {
           onSuccess: () => {
-            toast.success("payment successful! welcome to pro 🎉")
+            toast.success("payment successful! welcome to pro")
             setSettings(prev => prev ? { ...prev, plan: "pro" } : null)
           },
           onPending: () => toast.info("payment pending — we'll update your plan when confirmed"),

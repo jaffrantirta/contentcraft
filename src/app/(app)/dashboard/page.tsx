@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
 import Link from "next/link"
-import { PlusCircle, ImageIcon, Zap, ArrowRight } from "lucide-react"
+import { PlusCircle, ImageIcon, Zap, ArrowRight, Hand } from "lucide-react"
 
 interface Settings {
   plan: string
@@ -45,8 +45,9 @@ export default function DashboardPage() {
       {/* header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold tracking-tight">
-            hey, {session?.user?.name?.split(" ")[0] || "there"} 👋
+          <h1 className="text-xl md:text-2xl font-bold tracking-tight flex items-center gap-2">
+            hey, {session?.user?.name?.split(" ")[0] || "there"}
+            <Hand className="h-5 w-5 text-primary" />
           </h1>
           <p className="text-sm text-muted-foreground mt-1">ready to create something?</p>
         </div>

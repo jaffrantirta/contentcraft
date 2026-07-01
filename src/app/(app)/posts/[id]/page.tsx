@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
-import { ArrowLeft, Check, ChevronDown, Copy, Download, ImageOff, Loader2, RefreshCw, X } from "lucide-react"
+import { AlertTriangle, ArrowLeft, Check, ChevronDown, Copy, Download, ImageOff, Loader2, RefreshCw, X } from "lucide-react"
 import Link from "next/link"
 import { GeneratingAnimation } from "@/components/app/generating-animation"
 import { VIBES, DESIGN_STYLES } from "@/lib/tokenrouter"
@@ -438,7 +438,7 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
       {/* image expiry warning for free/byok users */}
       {(plan === "free" || plan === "byok") && post.status === "done" && (
         <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/8 px-4 py-2.5 flex items-start gap-2.5">
-          <span className="text-yellow-500 text-xs mt-0.5 shrink-0">⚠</span>
+          <AlertTriangle className="h-3.5 w-3.5 text-yellow-500 mt-0.5 shrink-0" />
           <p className="text-xs text-yellow-600 dark:text-yellow-400 leading-relaxed">
             <span className="font-medium">images may expire soon</span> — AI-generated images are not stored on your plan.
             Download your slides now. <Link href="/billing" className="underline underline-offset-2">upgrade to Pro</Link> to store images for 30 days.
@@ -826,13 +826,13 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                     key={v.id}
                     onClick={() => setRegenVibe(v.id)}
                     className={cn(
-                      "px-2.5 py-1.5 rounded-lg border text-[11px] transition-colors",
+                      "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] transition-colors",
                       regenVibe === v.id
                         ? "border-primary bg-primary/5 font-medium"
                         : "border-border/60 hover:border-border bg-card text-muted-foreground"
                     )}
                   >
-                    {v.emoji} {v.label}
+                    <v.icon className="h-3 w-3" /> {v.label}
                   </button>
                 ))}
               </div>
@@ -847,13 +847,13 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                     key={sOpt.id}
                     onClick={() => setRegenStyle(sOpt.id)}
                     className={cn(
-                      "px-2.5 py-1.5 rounded-lg border text-[11px] transition-colors",
+                      "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[11px] transition-colors",
                       regenStyle === sOpt.id
                         ? "border-primary bg-primary/5 font-medium"
                         : "border-border/60 hover:border-border bg-card text-muted-foreground"
                     )}
                   >
-                    {sOpt.emoji} {sOpt.label}
+                    <sOpt.icon className="h-3 w-3" /> {sOpt.label}
                   </button>
                 ))}
               </div>

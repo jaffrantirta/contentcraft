@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import { VIBES, COLOR_PALETTES, ASPECT_RATIOS, DESIGN_STYLES, TEXT_POSITIONS, TYPOGRAPHY_STYLES } from "@/lib/tokenrouter"
-import { Sparkles, Loader2, User, UserX, FileText, Lightbulb, AlignLeft, AlignCenter, AlignRight, Upload, X, Palette } from "lucide-react"
+import { Sparkles, Loader2, User, UserX, FileText, Lightbulb, Upload, X, Palette, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type AspectRatioId = typeof ASPECT_RATIOS[number]["id"]
@@ -270,7 +270,7 @@ export default function CreatePage() {
                     : "border-border/60 hover:border-border bg-card text-muted-foreground"
                 )}
               >
-                {lang === "id" ? "🇮🇩 indonesian" : "🇺🇸 english"}
+                {lang === "id" ? "indonesian" : "english"}
               </button>
             ))}
           </div>
@@ -379,7 +379,7 @@ export default function CreatePage() {
               >
                 <X className="h-3.5 w-3.5" />
               </button>
-              <div className="px-3 py-2 text-[10px] text-muted-foreground">subject image uploaded ✓</div>
+              <div className="px-3 py-2 text-[10px] text-muted-foreground flex items-center gap-1"><Check className="h-3 w-3 text-green-500" /> subject image uploaded</div>
             </div>
           ) : (
             <button
@@ -424,8 +424,8 @@ export default function CreatePage() {
                   : "border-border/60 hover:border-border bg-card"
               )}
             >
-              <span className="text-base">{v.emoji}</span>
-              <p className="text-xs font-medium mt-1">{v.label}</p>
+              <v.icon className={cn("h-4 w-4 text-muted-foreground", form.vibe === v.id && "text-primary")} />
+              <p className="text-xs font-medium mt-1.5">{v.label}</p>
               <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{v.description}</p>
             </button>
           ))}
@@ -447,8 +447,8 @@ export default function CreatePage() {
                   : "border-border/60 hover:border-border bg-card"
               )}
             >
-              <span className="text-base">{s.emoji}</span>
-              <p className="text-xs font-medium mt-1">{s.label}</p>
+              <s.icon className={cn("h-4 w-4 text-muted-foreground", form.designStyle === s.id && "text-primary")} />
+              <p className="text-xs font-medium mt-1.5">{s.label}</p>
               <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{s.description}</p>
             </button>
           ))}
@@ -459,28 +459,21 @@ export default function CreatePage() {
       <div className="space-y-3">
         <Label className="text-xs font-medium">text position</Label>
         <div className="grid grid-cols-4 gap-2">
-          {TEXT_POSITIONS.map(p => {
-            const icon =
-              p.id === "left"   ? <AlignLeft  className="h-4 w-4" /> :
-              p.id === "center" ? <AlignCenter className="h-4 w-4" /> :
-              p.id === "right"  ? <AlignRight  className="h-4 w-4" /> :
-              <Sparkles className="h-4 w-4" />
-            return (
-              <button
-                key={p.id}
-                onClick={() => set("textPosition", p.id)}
-                className={cn(
-                  "flex flex-col items-center gap-1.5 p-3 rounded-lg border text-center transition-colors",
-                  form.textPosition === p.id
-                    ? "border-primary bg-primary/5"
-                    : "border-border/60 hover:border-border bg-card"
-                )}
-              >
-                <span className={cn("text-muted-foreground", form.textPosition === p.id && "text-primary")}>{icon}</span>
-                <p className="text-[11px] font-medium">{p.label}</p>
-              </button>
-            )
-          })}
+          {TEXT_POSITIONS.map(p => (
+            <button
+              key={p.id}
+              onClick={() => set("textPosition", p.id)}
+              className={cn(
+                "flex flex-col items-center gap-1.5 p-3 rounded-lg border text-center transition-colors",
+                form.textPosition === p.id
+                  ? "border-primary bg-primary/5"
+                  : "border-border/60 hover:border-border bg-card"
+              )}
+            >
+              <p.icon className={cn("h-4 w-4 text-muted-foreground", form.textPosition === p.id && "text-primary")} />
+              <p className="text-[11px] font-medium">{p.label}</p>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -499,7 +492,7 @@ export default function CreatePage() {
                   : "border-border/60 hover:border-border bg-card"
               )}
             >
-              <span className="text-base leading-none">{t.emoji}</span>
+              <t.icon className={cn("h-4 w-4 text-muted-foreground", form.typographyStyle === t.id && "text-primary")} />
               <p className="text-xs font-medium mt-1.5">{t.label}</p>
               <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{t.description}</p>
             </button>
