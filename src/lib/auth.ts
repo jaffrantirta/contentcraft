@@ -22,8 +22,14 @@ export const auth = betterAuth({
     },
   },
   session: {
-    expiresIn: 60 * 60 * 24 * 7, // 7 days
-    updateAge: 60 * 60 * 24,
+    expiresIn: 60 * 60 * 24 * 30, // 30 days
+    // Rolling refresh: any activity within a day extends the session, so active
+    // users effectively stay logged in without ever re-authenticating.
+    updateAge: 60 * 60 * 24, // refresh once per day
+    cookieCache: {
+      enabled: true,
+      maxAge: 5 * 60, // cache session in a signed cookie for 5 min to avoid a db hit per request
+    },
   },
 })
 

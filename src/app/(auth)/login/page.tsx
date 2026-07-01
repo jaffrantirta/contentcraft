@@ -1,18 +1,34 @@
 "use client"
 
-import { useState } from "react"
-import { signIn } from "@/lib/auth-client"
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { signIn, useSession } from "@/lib/auth-client"
 import { Button } from "@/components/ui/button"
-import { Sparkles } from "lucide-react"
+import { Loader2, Sparkles } from "lucide-react"
 import Link from "next/link"
 
 export default function LoginPage() {
+  const router = useRouter()
+  const { data: session, isPending } = useSession()
   const [loading, setLoading] = useState(false)
+
+  // Already signed in — skip the login screen and go straight to the app.
+  useEffect(() => {
+    if (session) router.replace("/dashboard")
+  }, [session, router])
 
   async function handleGoogle() {
     setLoading(true)
     await signIn.social({ provider: "google", callbackURL: "/dashboard" })
     setLoading(false)
+  }
+
+  if (isPending || session) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+      </div>
+    )
   }
 
   return (
