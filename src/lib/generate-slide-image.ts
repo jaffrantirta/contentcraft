@@ -77,19 +77,55 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
 
   let imageUrl: string | null = null
 
-  try {
-    const imgRes = await client.images.generate({
-      model: imageModel,
-      prompt: fullPrompt,
-      size: imageSize as "1024x1024" | "1024x1536" | "1536x1024",
-      n: 1,
-    })
-    const imgData = imgRes.data?.[0]
-    if (imgData?.url) imageUrl = imgData.url
-    else if (imgData?.b64_json) imageUrl = `data:image/png;base64,${imgData.b64_json}`
-  } catch (err) {
-    console.error(`[image] slide ${slideId} failed:`, err instanceof Error ? err.message : err)
-    return null
+  // If a subject image was uploaded, try images.edit to blend the subject into the design
+  if (postRow.subjectImageUrl) {
+    try {
+      const subjectResp = await fetch(postRow.subjectImageUrl)
+      const subjectBuf = Buffer.from(await subjectResp.arrayBuffer())
+      const subjectFile = new File([subjectBuf], "subject.png", { type: "image/png" })
+
+      const editPrompt = [
+        "Incorporate the person or subject from the provided reference image naturally into this design.",
+        fullPrompt,
+      ].join(" ")
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const editRes = await (client.images as any).edit({
+        model: imageModel,
+        image: subjectFile,
+        prompt: editPrompt,
+        size: imageSize,
+        n: 1,
+      })
+      const editData = editRes.data?.[0]
+      if (editData?.url) imageUrl = editData.url
+      else if (editData?.b64_json) imageUrl = `data:image/png;base64,${editData.b64_json}`
+      console.log(`[image] slide ${slideId} generated via images.edit (subject blend)`)
+    } catch (editErr) {
+      console.warn(`[image] images.edit failed, falling back to generate:`, editErr instanceof Error ? editErr.message : editErr)
+    }
+  }
+
+  // Standard generation (used when no subject image, or edit failed)
+  if (!imageUrl) {
+    const subjectHint = postRow.subjectImageUrl
+      ? "The design must prominently feature a real person as the main subject, naturally integrated into the scene."
+      : ""
+
+    try {
+      const imgRes = await client.images.generate({
+        model: imageModel,
+        prompt: [fullPrompt, subjectHint].filter(Boolean).join(" "),
+        size: imageSize as "1024x1024" | "1024x1536" | "1536x1024",
+        n: 1,
+      })
+      const imgData = imgRes.data?.[0]
+      if (imgData?.url) imageUrl = imgData.url
+      else if (imgData?.b64_json) imageUrl = `data:image/png;base64,${imgData.b64_json}`
+    } catch (err) {
+      console.error(`[image] slide ${slideId} failed:`, err instanceof Error ? err.message : err)
+      return null
+    }
   }
 
   if (!imageUrl) return null

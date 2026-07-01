@@ -45,6 +45,8 @@ export async function POST(req: NextRequest) {
     showFooter,
     textPosition, // auto | left | center | right
     typographyStyle, // auto | bold | serif | sans | handwritten | decorative
+    subjectImageUrl,
+    subjectStorageKey,
   } = body
 
   if (!brief) return NextResponse.json({ error: "brief is required" }, { status: 400 })
@@ -76,6 +78,8 @@ export async function POST(req: NextRequest) {
     colorPalette: colorPalette || [],
     textPosition: textPosition || "auto",
     typographyStyle: typographyStyle || "auto",
+    subjectImageUrl: subjectImageUrl || null,
+    subjectStorageKey: subjectStorageKey || null,
     status: "generating",
   })
 

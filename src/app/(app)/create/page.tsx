@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
 import { VIBES, COLOR_PALETTES, ASPECT_RATIOS, DESIGN_STYLES, TEXT_POSITIONS, TYPOGRAPHY_STYLES } from "@/lib/tokenrouter"
-import { Sparkles, Loader2, User, UserX, FileText, Lightbulb, AlignLeft, AlignCenter, AlignRight } from "lucide-react"
+import { Sparkles, Loader2, User, UserX, FileText, Lightbulb, AlignLeft, AlignCenter, AlignRight, Upload, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { GeneratingAnimation } from "@/components/app/generating-animation"
 
@@ -37,6 +37,11 @@ interface FormState {
 export default function CreatePage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [subjectImageUrl, setSubjectImageUrl] = useState<string | null>(null)
+  const [subjectStorageKey, setSubjectStorageKey] = useState<string | null>(null)
+  const [uploadingSubject, setUploadingSubject] = useState(false)
+  const subjectInputRef = useRef<HTMLInputElement>(null)
+
   const [form, setForm] = useState<FormState>({
     brief: "",
     slideBriefs: ["", "", ""],
@@ -72,6 +77,36 @@ export default function CreatePage() {
     })
   }
 
+  async function handleSubjectFile(file: File) {
+    setUploadingSubject(true)
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      const res = await fetch("/api/upload/subject", { method: "POST", body: fd })
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error || "upload failed") }
+      const { url, key } = await res.json()
+      setSubjectImageUrl(url)
+      setSubjectStorageKey(key)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "upload failed")
+    } finally {
+      setUploadingSubject(false)
+      if (subjectInputRef.current) subjectInputRef.current.value = ""
+    }
+  }
+
+  async function removeSubjectImage() {
+    if (subjectStorageKey) {
+      await fetch("/api/upload/subject", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: subjectStorageKey }),
+      }).catch(() => {})
+    }
+    setSubjectImageUrl(null)
+    setSubjectStorageKey(null)
+  }
+
   async function handleGenerate() {
     if (!form.brief.trim()) {
       toast.error("please write a general brief first")
@@ -103,6 +138,8 @@ export default function CreatePage() {
           colorPalette: selectedPalette?.colors || [],
           textPosition: form.textPosition,
           typographyStyle: form.typographyStyle,
+          subjectImageUrl: subjectImageUrl || null,
+          subjectStorageKey: subjectStorageKey || null,
         }),
       })
 
@@ -324,6 +361,50 @@ export default function CreatePage() {
           </button>
         </div>
       </div>
+
+      {/* subject image upload — shown when withSubject is true */}
+      {form.withSubject && (
+        <div className="space-y-2">
+          <Label className="text-xs font-medium">subject photo <span className="text-muted-foreground font-normal">(optional)</span></Label>
+          <p className="text-[10px] text-muted-foreground">upload a photo of the person or product — AI will blend them into the design</p>
+
+          {subjectImageUrl ? (
+            <div className="relative w-full rounded-lg overflow-hidden border border-border/60 bg-muted/30">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={subjectImageUrl} alt="subject" className="w-full max-h-40 object-cover" />
+              <button
+                onClick={removeSubjectImage}
+                className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+              <div className="px-3 py-2 text-[10px] text-muted-foreground">subject image uploaded ✓</div>
+            </div>
+          ) : (
+            <button
+              onClick={() => subjectInputRef.current?.click()}
+              disabled={uploadingSubject}
+              className="w-full border-2 border-dashed border-border/60 hover:border-border rounded-lg p-4 flex flex-col items-center gap-1.5 transition-colors bg-card"
+            >
+              {uploadingSubject
+                ? <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
+                : <Upload className="h-5 w-5 text-muted-foreground" />
+              }
+              <span className="text-xs text-muted-foreground">
+                {uploadingSubject ? "uploading..." : "click to upload subject photo"}
+              </span>
+              <span className="text-[10px] text-muted-foreground">PNG, JPG, WebP · max 5MB</span>
+            </button>
+          )}
+          <input
+            ref={subjectInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/jpg,image/webp"
+            className="hidden"
+            onChange={e => e.target.files?.[0] && handleSubjectFile(e.target.files[0])}
+          />
+        </div>
+      )}
 
       <Separator />
 

@@ -124,6 +124,8 @@ export const post = pgTable("post", {
   colorPalette: jsonb("color_palette").$type<string[]>().notNull().default([]),
   textPosition: varchar("text_position", { length: 20 }).notNull().default("auto"), // auto | left | center | right
   typographyStyle: varchar("typography_style", { length: 30 }).notNull().default("auto"), // auto | bold | serif | sans | handwritten | decorative
+  subjectImageUrl: text("subject_image_url"),
+  subjectStorageKey: text("subject_storage_key"),
   status: varchar("status", { length: 20 }).notNull().default("pending"), // pending | generating | done | error
   errorMessage: text("error_message"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
