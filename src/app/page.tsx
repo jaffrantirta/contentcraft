@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { ArrowRight, Sparkles, ImageIcon, Languages, Palette, Layers, Star, Zap, Lock } from "lucide-react"
 import { VIBES } from "@/lib/tokenrouter"
+import { NavAuth } from "@/components/app/nav-auth"
 
 const features = [
   { icon: Sparkles, title: "ai-powered briefs", desc: "just describe your idea — ai handles the rest" },
@@ -49,12 +50,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
           <span className="text-sm font-semibold tracking-tight">contentcraft</span>
           <div className="flex items-center gap-3">
-            <Link href="/login">
-              <Button variant="ghost" size="sm" className="text-xs">log in</Button>
-            </Link>
-            <Link href="/login">
-              <Button size="sm" className="text-xs h-8">get started <ArrowRight className="ml-1 h-3 w-3" /></Button>
-            </Link>
+            <NavAuth />
           </div>
         </div>
       </nav>
