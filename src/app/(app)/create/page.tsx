@@ -7,8 +7,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
-import { VIBES, COLOR_PALETTES, ASPECT_RATIOS, DESIGN_STYLES } from "@/lib/tokenrouter"
-import { Sparkles, Loader2, User, UserX, FileText, Lightbulb } from "lucide-react"
+import { VIBES, COLOR_PALETTES, ASPECT_RATIOS, DESIGN_STYLES, TEXT_POSITIONS, TYPOGRAPHY_STYLES } from "@/lib/tokenrouter"
+import { Sparkles, Loader2, User, UserX, FileText, Lightbulb, AlignLeft, AlignCenter, AlignRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { GeneratingAnimation } from "@/components/app/generating-animation"
 
@@ -16,6 +16,8 @@ type AspectRatioId = typeof ASPECT_RATIOS[number]["id"]
 type VibeId = typeof VIBES[number]["id"]
 type PaletteId = typeof COLOR_PALETTES[number]["id"]
 type StyleId = typeof DESIGN_STYLES[number]["id"]
+type TextPositionId = typeof TEXT_POSITIONS[number]["id"]
+type TypographyId = typeof TYPOGRAPHY_STYLES[number]["id"]
 
 interface FormState {
   brief: string
@@ -28,6 +30,8 @@ interface FormState {
   vibe: VibeId
   designStyle: StyleId
   colorPalette: PaletteId
+  textPosition: TextPositionId
+  typographyStyle: TypographyId
 }
 
 export default function CreatePage() {
@@ -44,6 +48,8 @@ export default function CreatePage() {
     vibe: "professional",
     designStyle: "realistic",
     colorPalette: "ocean",
+    textPosition: "auto",
+    typographyStyle: "auto",
   })
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
@@ -95,6 +101,8 @@ export default function CreatePage() {
           vibe: form.vibe,
           designStyle: form.designStyle,
           colorPalette: selectedPalette?.colors || [],
+          textPosition: form.textPosition,
+          typographyStyle: form.typographyStyle,
         }),
       })
 
@@ -360,6 +368,58 @@ export default function CreatePage() {
               <span className="text-base">{s.emoji}</span>
               <p className="text-xs font-medium mt-1">{s.label}</p>
               <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{s.description}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* text position */}
+      <div className="space-y-3">
+        <Label className="text-xs font-medium">text position</Label>
+        <div className="grid grid-cols-4 gap-2">
+          {TEXT_POSITIONS.map(p => {
+            const icon =
+              p.id === "left"   ? <AlignLeft  className="h-4 w-4" /> :
+              p.id === "center" ? <AlignCenter className="h-4 w-4" /> :
+              p.id === "right"  ? <AlignRight  className="h-4 w-4" /> :
+              <Sparkles className="h-4 w-4" />
+            return (
+              <button
+                key={p.id}
+                onClick={() => set("textPosition", p.id)}
+                className={cn(
+                  "flex flex-col items-center gap-1.5 p-3 rounded-lg border text-center transition-colors",
+                  form.textPosition === p.id
+                    ? "border-primary bg-primary/5"
+                    : "border-border/60 hover:border-border bg-card"
+                )}
+              >
+                <span className={cn("text-muted-foreground", form.textPosition === p.id && "text-primary")}>{icon}</span>
+                <p className="text-[11px] font-medium">{p.label}</p>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* typography style */}
+      <div className="space-y-3">
+        <Label className="text-xs font-medium">typography style</Label>
+        <div className="grid grid-cols-3 gap-2">
+          {TYPOGRAPHY_STYLES.map(t => (
+            <button
+              key={t.id}
+              onClick={() => set("typographyStyle", t.id)}
+              className={cn(
+                "p-3 rounded-lg border text-left transition-colors",
+                form.typographyStyle === t.id
+                  ? "border-primary bg-primary/5"
+                  : "border-border/60 hover:border-border bg-card"
+              )}
+            >
+              <span className="text-base leading-none">{t.emoji}</span>
+              <p className="text-xs font-medium mt-1.5">{t.label}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-1">{t.description}</p>
             </button>
           ))}
         </div>

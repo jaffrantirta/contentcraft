@@ -51,6 +51,22 @@ export const DESIGN_STYLES = [
   { id: "minimal",      label: "minimal",      emoji: "⬜", description: "ultra-minimal, line art, lots of white space" },
 ] as const
 
+export const TEXT_POSITIONS = [
+  { id: "auto",   label: "auto",   emoji: "✨", description: "AI picks the best placement" },
+  { id: "left",   label: "left",   emoji: "⬛", description: "text anchored to the left side" },
+  { id: "center", label: "center", emoji: "⬜", description: "text centered horizontally" },
+  { id: "right",  label: "right",  emoji: "⬛", description: "text anchored to the right side" },
+] as const
+
+export const TYPOGRAPHY_STYLES = [
+  { id: "auto",        label: "auto",        emoji: "✨", description: "AI picks the best typography" },
+  { id: "bold",        label: "bold",        emoji: "𝗕",  description: "ultra-bold display, high impact" },
+  { id: "serif",       label: "serif",       emoji: "𝑆",  description: "classic elegant serif fonts" },
+  { id: "sans",        label: "sans-serif",  emoji: "S",  description: "clean modern sans-serif" },
+  { id: "handwritten", label: "handwritten", emoji: "✍",  description: "casual script, hand-lettered" },
+  { id: "decorative",  label: "decorative",  emoji: "★",  description: "ornate decorative display fonts" },
+] as const
+
 export const ASPECT_RATIOS = [
   { id: "1:1", label: "square", description: "1:1 — instagram post", width: 1024, height: 1024 },
   { id: "4:5", label: "portrait", description: "4:5 — instagram portrait", width: 896, height: 1120 },

@@ -40,14 +40,32 @@ export async function generateSlideImage(slideId: string, userId: string): Promi
     ? `Leave the ${identityRow.logoPosition.replace("-", " ")} corner completely empty — a brand logo will be placed there.`
     : ""
 
+  const textAlignHints: Record<string, string> = {
+    left:   "All slide text must be LEFT-aligned, anchored to the left side of the design.",
+    center: "All slide text must be CENTERED horizontally in the design.",
+    right:  "All slide text must be RIGHT-aligned, anchored to the right side of the design.",
+  }
+  const textAlignHint = textAlignHints[postRow.textPosition ?? ""] ?? ""
+
+  const typographyHints: Record<string, string> = {
+    bold:        "Typography: ultra-bold, heavy display fonts — thick strokes, maximum visual weight, high-impact headlines.",
+    serif:       "Typography: classic elegant serif fonts — refined, authoritative, editorial.",
+    sans:        "Typography: clean geometric sans-serif — modern, minimal, corporate.",
+    handwritten: "Typography: casual handwritten/brush-script style — organic, personal, expressive lettering.",
+    decorative:  "Typography: ornate decorative display fonts — artistic, elaborate, attention-grabbing.",
+  }
+  const typographyHint = typographyHints[postRow.typographyStyle ?? ""] ?? ""
+
   let fullPrompt: string
   if (hasCaption) {
     fullPrompt = [
       "Create a complete, professional social media carousel slide graphic.",
       `Slide text (must appear clearly and prominently in the design): "${slideRow.caption}"`,
       `Visual concept: ${slideRow.imagePrompt}`,
+      textAlignHint,
+      typographyHint,
       logoZone,
-      "Bold, readable typography integrated naturally into the design. High quality, eye-catching, Instagram-ready. Full bleed — no empty bars or borders.",
+      "High quality, eye-catching, Instagram-ready. Full bleed — no empty bars or borders.",
     ].filter(Boolean).join(" ")
   } else {
     fullPrompt = [

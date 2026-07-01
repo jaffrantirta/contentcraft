@@ -43,6 +43,8 @@ export async function POST(req: NextRequest) {
     colorPalette,
     captionMode, // "text_ready" | "raw_brief"
     showFooter,
+    textPosition, // auto | left | center | right
+    typographyStyle, // auto | bold | serif | sans | handwritten | decorative
   } = body
 
   if (!brief) return NextResponse.json({ error: "brief is required" }, { status: 400 })
@@ -72,6 +74,8 @@ export async function POST(req: NextRequest) {
     slideBriefs: Array.isArray(slideBriefs) ? slideBriefs : [],
     showFooter: showFooter !== false,
     colorPalette: colorPalette || [],
+    textPosition: textPosition || "auto",
+    typographyStyle: typographyStyle || "auto",
     status: "generating",
   })
 
@@ -92,7 +96,14 @@ export async function POST(req: NextRequest) {
     ? ` Brand context: ${identityData.companyName}${identityData.tagline ? ` — ${identityData.tagline}` : ""}.`
     : ""
 
-  const imagePromptRule = `For "imagePrompt": describe the visual concept, scene, mood, lighting, composition, and objects. Style: ${styleHint}. Color palette: ${colorPalette?.join(", ") || "vibrant"}.${withSubject ? " Include a person/subject." : " No people."}${brandNote} Do NOT include any text or words here — only the visual scene.`
+  const positionHints: Record<string, string> = {
+    left:   "Compose the scene so the main visual subject sits on the RIGHT; keep the left side open and uncluttered for text.",
+    center: "Use a symmetrical, center-focused composition; visual elements frame the edges, leaving the center clear for text.",
+    right:  "Compose the scene so the main visual subject sits on the LEFT; keep the right side open and uncluttered for text.",
+  }
+  const positionHint = positionHints[textPosition] ?? ""
+
+  const imagePromptRule = `For "imagePrompt": describe the visual concept, scene, mood, lighting, composition, and objects. Style: ${styleHint}. Color palette: ${colorPalette?.join(", ") || "vibrant"}.${withSubject ? " Include a person/subject." : " No people."}${brandNote}${positionHint ? ` ${positionHint}` : ""} Do NOT include any text or words here — only the visual scene.`
 
   function cleanRaw(s: string): string {
     return s
