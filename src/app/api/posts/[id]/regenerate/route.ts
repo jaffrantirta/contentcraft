@@ -5,6 +5,7 @@ import { slide, post } from "@/lib/db/schema"
 import { eq, and, inArray } from "drizzle-orm"
 import { headers } from "next/headers"
 import { generateSlideImage } from "@/lib/generate-slide-image"
+import { ASPECT_RATIOS, normalizeCustomSize } from "@/lib/tokenrouter"
 
 export const maxDuration = 60
 
@@ -13,12 +14,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
 
   const { id: postId } = await params
-  const { slideIds, vibe, designStyle, colorPalette, revisionPrompt } = await req.json() as {
+  const { slideIds, vibe, designStyle, colorPalette, revisionPrompt, aspectRatio, imageWidth, imageHeight } = await req.json() as {
     slideIds: string[]
     vibe?: string
     designStyle?: string
     colorPalette?: string[]
     revisionPrompt?: string
+    aspectRatio?: string
+    imageWidth?: number
+    imageHeight?: number
   }
 
   if (!Array.isArray(slideIds) || slideIds.length === 0) {
@@ -52,6 +56,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (typeof vibe === "string" && vibe) postUpdate.vibe = vibe
   if (typeof designStyle === "string" && designStyle) postUpdate.designStyle = designStyle
   if (Array.isArray(colorPalette) && colorPalette.length) postUpdate.colorPalette = colorPalette
+
+  // Ratio/size override — regenerated slides can switch to a different ratio or a custom size.
+  if (typeof aspectRatio === "string" && aspectRatio) {
+    if (aspectRatio === "custom") {
+      const customSize = normalizeCustomSize(imageWidth, imageHeight)
+      if (!customSize) return NextResponse.json({ error: "invalid custom size" }, { status: 400 })
+      postUpdate.aspectRatio = "custom"
+      postUpdate.imageWidth = customSize.width
+      postUpdate.imageHeight = customSize.height
+    } else if (ASPECT_RATIOS.some(r => r.id === aspectRatio)) {
+      postUpdate.aspectRatio = aspectRatio
+      postUpdate.imageWidth = null
+      postUpdate.imageHeight = null
+    }
+  }
 
   await Promise.all(
     slides.map(s => db.update(slide).set({ imageUrl: null }).where(eq(slide.id, s.id)))

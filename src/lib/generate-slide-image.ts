@@ -1,9 +1,10 @@
 import { db } from "@/lib/db"
 import { slide, post, userSettings, identity } from "@/lib/db/schema"
-import { getTokenRouterClient, DEFAULT_IMAGE_MODEL } from "@/lib/tokenrouter"
+import { getTokenRouterClient, DEFAULT_IMAGE_MODEL, resolveTargetSize } from "@/lib/tokenrouter"
 import { uploadFile, storageEnabled } from "@/lib/storage"
 import { eq, asc } from "drizzle-orm"
 import { v4 as uuidv4 } from "uuid"
+import sharp from "sharp"
 
 export async function generateSlideImage(
   slideId: string,
@@ -31,13 +32,12 @@ export async function generateSlideImage(
   )
   const imageModel = isByok && settings?.byokModel ? settings.byokModel : DEFAULT_IMAGE_MODEL
 
-  const sizeMap: Record<string, string> = {
-    "1:1":  "1024x1024",
-    "4:5":  "1024x1536",
-    "9:16": "1024x1536",
-    "16:9": "1536x1024",
-  }
-  const imageSize = sizeMap[postRow.aspectRatio] || "1024x1024"
+  // Exact output size (e.g. 4:5 → 1080x1350, or the user's custom size).
+  // The API only generates fixed sizes, so we pick the closest orientation
+  // and crop/resize to the exact target afterwards.
+  const target = resolveTargetSize(postRow.aspectRatio, postRow.imageWidth, postRow.imageHeight)
+  const targetRatio = target.width / target.height
+  const imageSize = targetRatio > 1.15 ? "1536x1024" : targetRatio < 0.87 ? "1024x1536" : "1024x1024"
 
   const hasCaption = !!slideRow.caption?.trim()
   const logoZone = (identityRow?.logoUrl && identityRow.logoPosition && identityRow.logoPosition !== "none")
@@ -110,22 +110,32 @@ export async function generateSlideImage(
 
   let imageUrl: string | null = null
 
-  // If a subject image was uploaded, try images.edit to blend the subject into the design
-  if (postRow.subjectImageUrl) {
+  // If a background and/or subject image was uploaded, try images.edit to blend them into the design
+  if (postRow.subjectImageUrl || postRow.backgroundImageUrl) {
     try {
-      const subjectResp = await fetch(postRow.subjectImageUrl)
-      const subjectBuf = Buffer.from(await subjectResp.arrayBuffer())
-      const subjectFile = new File([subjectBuf], "subject.png", { type: "image/png" })
+      const fetchAsFile = async (url: string, name: string) => {
+        const resp = await fetch(url)
+        const buf = Buffer.from(await resp.arrayBuffer())
+        return new File([buf], name, { type: "image/png" })
+      }
 
-      const editPrompt = [
-        "Incorporate the person or subject from the provided reference image naturally into this design.",
-        fullPrompt,
-      ].join(" ")
+      const refImages: File[] = []
+      const refHints: string[] = []
+      if (postRow.backgroundImageUrl) {
+        refImages.push(await fetchAsFile(postRow.backgroundImageUrl, "background.png"))
+        refHints.push("Use the provided background reference image as the base/background of the design — keep its look and build the layout, text, and graphics on top of it.")
+      }
+      if (postRow.subjectImageUrl) {
+        refImages.push(await fetchAsFile(postRow.subjectImageUrl, "subject.png"))
+        refHints.push("Incorporate the person or subject from the provided reference image naturally into this design.")
+      }
+
+      const editPrompt = [...refHints, fullPrompt].join(" ")
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const editRes = await (client.images as any).edit({
         model: imageModel,
-        image: subjectFile,
+        image: refImages.length === 1 ? refImages[0] : refImages,
         prompt: editPrompt,
         size: imageSize,
         n: 1,
@@ -133,7 +143,7 @@ export async function generateSlideImage(
       const editData = editRes.data?.[0]
       if (editData?.url) imageUrl = editData.url
       else if (editData?.b64_json) imageUrl = `data:image/png;base64,${editData.b64_json}`
-      console.log(`[image] slide ${slideId} generated via images.edit (subject blend)`)
+      console.log(`[image] slide ${slideId} generated via images.edit (${refHints.length} reference image${refHints.length > 1 ? "s" : ""})`)
     } catch (editErr) {
       console.warn(`[image] images.edit failed, falling back to generate:`, editErr instanceof Error ? editErr.message : editErr)
     }
@@ -162,6 +172,25 @@ export async function generateSlideImage(
   }
 
   if (!imageUrl) return null
+
+  // Resize/crop to the exact target size (e.g. 1080x1350 for 4:5) — the API only
+  // generates a few fixed sizes, so this guarantees the requested dimensions.
+  try {
+    let buf: Buffer
+    if (imageUrl.startsWith("data:")) {
+      buf = Buffer.from(imageUrl.split(",")[1], "base64")
+    } else {
+      const resp = await fetch(imageUrl)
+      buf = Buffer.from(await resp.arrayBuffer())
+    }
+    const resized = await sharp(buf)
+      .resize(target.width, target.height, { fit: "cover", position: "centre" })
+      .png()
+      .toBuffer()
+    imageUrl = `data:image/png;base64,${resized.toString("base64")}`
+  } catch (err) {
+    console.warn(`[image] resize to ${target.width}x${target.height} failed for slide ${slideId}, keeping original:`, err instanceof Error ? err.message : err)
+  }
 
   // Pro users: upload to S3 for persistent storage (30-day lifecycle configured on bucket)
   if (isPro && storageEnabled()) {

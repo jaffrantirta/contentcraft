@@ -112,7 +112,9 @@ export const post = pgTable("post", {
   userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
   title: text("title"),
   brief: text("brief").notNull(),
-  aspectRatio: varchar("aspect_ratio", { length: 10 }).notNull().default("1:1"), // 1:1 | 4:5 | 9:16 | 16:9
+  aspectRatio: varchar("aspect_ratio", { length: 10 }).notNull().default("1:1"), // 1:1 | 4:5 | 4:3 | 9:16 | 16:9 | custom
+  imageWidth: integer("image_width"),   // exact output px, set when aspectRatio = custom
+  imageHeight: integer("image_height"),
   language: varchar("language", { length: 5 }).notNull().default("id"), // id | en
   slideCount: integer("slide_count").notNull().default(3),
   withSubject: boolean("with_subject").notNull().default(false),
@@ -126,6 +128,8 @@ export const post = pgTable("post", {
   typographyStyle: varchar("typography_style", { length: 30 }).notNull().default("auto"), // auto | bold | serif | sans | handwritten | decorative
   subjectImageUrl: text("subject_image_url"),
   subjectStorageKey: text("subject_storage_key"),
+  backgroundImageUrl: text("background_image_url"),
+  backgroundStorageKey: text("background_storage_key"),
   status: varchar("status", { length: 20 }).notNull().default("pending"), // pending | generating | done | error
   errorMessage: text("error_message"),
   createdAt: timestamp("created_at").notNull().defaultNow(),

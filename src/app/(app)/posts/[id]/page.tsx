@@ -13,7 +13,7 @@ import { toast } from "sonner"
 import { AlertTriangle, ArrowLeft, Check, ChevronDown, Copy, Download, ImageOff, Loader2, RefreshCw, X } from "lucide-react"
 import Link from "next/link"
 import { GeneratingAnimation } from "@/components/app/generating-animation"
-import { VIBES, DESIGN_STYLES } from "@/lib/tokenrouter"
+import { VIBES, DESIGN_STYLES, ASPECT_RATIOS, CUSTOM_SIZE_MIN, CUSTOM_SIZE_MAX } from "@/lib/tokenrouter"
 import { cn } from "@/lib/utils"
 
 interface Slide {
@@ -37,6 +37,8 @@ interface Post {
   showFooter: boolean
   language: string
   aspectRatio: string
+  imageWidth: number | null
+  imageHeight: number | null
   slideCount: number
   withSubject: boolean
   colorPalette: string[]
@@ -84,6 +86,15 @@ function logoOverlayClass(position: LogoPosition): string {
   }
 }
 
+// CSS aspect-ratio for the post's target size (preset or custom)
+function postAspectStyle(p: Pick<Post, "aspectRatio" | "imageWidth" | "imageHeight">): React.CSSProperties {
+  if (p.aspectRatio === "custom" && p.imageWidth && p.imageHeight) {
+    return { aspectRatio: `${p.imageWidth} / ${p.imageHeight}` }
+  }
+  const preset = ASPECT_RATIOS.find(r => r.id === p.aspectRatio)
+  return { aspectRatio: preset ? `${preset.width} / ${preset.height}` : "1 / 1" }
+}
+
 async function getPost(id: string): Promise<Post | null> {
   const res = await fetch(`/api/posts/${id}`)
   if (!res.ok) return null
@@ -107,6 +118,9 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
   const [regenning, setRegenning] = useState(false)
   const [regenVibe, setRegenVibe] = useState<string>("professional")
   const [regenStyle, setRegenStyle] = useState<string>("realistic")
+  const [regenRatio, setRegenRatio] = useState<string>("1:1")
+  const [regenWidth, setRegenWidth] = useState("1080")
+  const [regenHeight, setRegenHeight] = useState("1350")
   const [regenRevision, setRegenRevision] = useState("")
   const [prevImages, setPrevImages] = useState<Record<string, string>>({})
   const [overlayDismissed, setOverlayDismissed] = useState(false)
@@ -279,6 +293,9 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
   function seedRegenOptions() {
     setRegenVibe(post?.vibe ?? "professional")
     setRegenStyle(post?.designStyle ?? "realistic")
+    setRegenRatio(post?.aspectRatio ?? "1:1")
+    setRegenWidth(String(post?.imageWidth ?? 1080))
+    setRegenHeight(String(post?.imageHeight ?? 1350))
     setRegenRevision("")
   }
 
@@ -309,6 +326,19 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
 
   async function startRegen() {
     if (!post || regenning || regenSelected.size === 0) return
+    let customW: number | undefined
+    let customH: number | undefined
+    if (regenRatio === "custom") {
+      const w = Math.round(Number(regenWidth))
+      const h = Math.round(Number(regenHeight))
+      const valid = (n: number) => Number.isFinite(n) && n >= CUSTOM_SIZE_MIN && n <= CUSTOM_SIZE_MAX
+      if (!valid(w) || !valid(h)) {
+        toast.error(`custom size must be between ${CUSTOM_SIZE_MIN} and ${CUSTOM_SIZE_MAX}px`)
+        return
+      }
+      customW = w
+      customH = h
+    }
     setRegenning(true)
     try {
       const res = await fetch(`/api/posts/${id}/regenerate`, {
@@ -318,6 +348,9 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
           slideIds: Array.from(regenSelected),
           vibe: regenVibe,
           designStyle: regenStyle,
+          aspectRatio: regenRatio,
+          imageWidth: customW,
+          imageHeight: customH,
           revisionPrompt: regenRevision.trim() || undefined,
         }),
       })
@@ -450,14 +483,8 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
         {/* image area */}
         <div className="space-y-4">
           <div
-            style={{ containerType: "inline-size" }}
-            className={cn(
-              "rounded-xl overflow-hidden bg-muted flex items-center justify-center border border-border/60",
-              post.aspectRatio === "16:9" ? "aspect-video" :
-              post.aspectRatio === "4:5"  ? "aspect-[4/5]" :
-              post.aspectRatio === "9:16" ? "aspect-[9/16]" :
-              "aspect-square"
-            )}>
+            style={{ containerType: "inline-size", ...postAspectStyle(post) }}
+            className="rounded-xl overflow-hidden bg-muted flex items-center justify-center border border-border/60">
             {(() => {
               // captions still being written — no slides exist yet
               if (noSlidesYet && isWorking) {
@@ -590,12 +617,9 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                 <button
                   key={s.id}
                   onClick={() => setActiveSlide(i)}
+                  style={postAspectStyle(post)}
                   className={cn(
-                    "relative shrink-0 rounded-lg overflow-hidden border-2 transition-colors",
-                    post.aspectRatio === "16:9" ? "w-20 h-[45px]" :
-                    post.aspectRatio === "4:5"  ? "w-11 h-[55px]" :
-                    post.aspectRatio === "9:16" ? "w-8 h-[57px]" :
-                    "w-14 h-14",
+                    "relative shrink-0 h-14 rounded-lg overflow-hidden border-2 transition-colors",
                     activeSlide === i ? "border-primary" : "border-border/40 hover:border-border"
                   )}
                 >
@@ -789,11 +813,9 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                         return n
                       })
                     }
+                    style={postAspectStyle(post)}
                     className={cn(
                       "relative rounded-lg overflow-hidden border-2 transition-colors",
-                      post.aspectRatio === "16:9" ? "aspect-video" :
-                      post.aspectRatio === "4:5"  ? "aspect-[4/5]" :
-                      post.aspectRatio === "9:16" ? "aspect-[9/16]" : "aspect-square",
                       regenSelected.has(s.id) ? "border-primary" : "border-border/40 hover:border-border"
                     )}
                   >
@@ -857,6 +879,65 @@ export default function PostDetailPage({ params }: { params: Promise<{ id: strin
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* ratio & size override */}
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">ratio & size</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {ASPECT_RATIOS.map(r => (
+                  <button
+                    key={r.id}
+                    onClick={() => setRegenRatio(r.id)}
+                    className={cn(
+                      "px-2.5 py-1.5 rounded-lg border text-[11px] transition-colors",
+                      regenRatio === r.id
+                        ? "border-primary bg-primary/5 font-medium"
+                        : "border-border/60 hover:border-border bg-card text-muted-foreground"
+                    )}
+                  >
+                    {r.label} · {r.width}×{r.height}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setRegenRatio("custom")}
+                  className={cn(
+                    "px-2.5 py-1.5 rounded-lg border text-[11px] transition-colors",
+                    regenRatio === "custom"
+                      ? "border-primary bg-primary/5 font-medium"
+                      : "border-border/60 hover:border-border bg-card text-muted-foreground"
+                  )}
+                >
+                  custom
+                </button>
+              </div>
+              {regenRatio === "custom" && (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min={CUSTOM_SIZE_MIN}
+                    max={CUSTOM_SIZE_MAX}
+                    value={regenWidth}
+                    onChange={e => setRegenWidth(e.target.value)}
+                    placeholder="width"
+                    className="flex-1 text-xs rounded-lg border border-border/60 bg-background px-3 py-2 font-mono"
+                  />
+                  <span className="text-xs text-muted-foreground">×</span>
+                  <input
+                    type="number"
+                    min={CUSTOM_SIZE_MIN}
+                    max={CUSTOM_SIZE_MAX}
+                    value={regenHeight}
+                    onChange={e => setRegenHeight(e.target.value)}
+                    placeholder="height"
+                    className="flex-1 text-xs rounded-lg border border-border/60 bg-background px-3 py-2 font-mono"
+                  />
+                  <span className="text-[10px] text-muted-foreground shrink-0">px ({CUSTOM_SIZE_MIN}–{CUSTOM_SIZE_MAX})</span>
+                </div>
+              )}
+              {regenRatio !== post.aspectRatio && (
+                <p className="text-[10px] text-muted-foreground">the whole post switches to this ratio — slides you don&apos;t regenerate will keep their old shape until regenerated</p>
+              )}
             </div>
 
             {/* revision note */}

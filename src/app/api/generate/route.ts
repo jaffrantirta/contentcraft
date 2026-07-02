@@ -2,7 +2,7 @@ import { NextRequest, NextResponse, after } from "next/server"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { post, slide, userSettings, identity } from "@/lib/db/schema"
-import { getTokenRouterClient, DEFAULT_CHAT_MODEL } from "@/lib/tokenrouter"
+import { getTokenRouterClient, DEFAULT_CHAT_MODEL, normalizeCustomSize } from "@/lib/tokenrouter"
 import { generateSlideImage } from "@/lib/generate-slide-image"
 import { eq } from "drizzle-orm"
 import { v4 as uuidv4 } from "uuid"
@@ -47,9 +47,21 @@ export async function POST(req: NextRequest) {
     typographyStyle, // auto | bold | serif | sans | handwritten | decorative
     subjectImageUrl,
     subjectStorageKey,
+    imageWidth,
+    imageHeight,
+    backgroundImageUrl,
+    backgroundStorageKey,
   } = body
 
   if (!brief) return NextResponse.json({ error: "brief is required" }, { status: 400 })
+
+  // Custom size: validate; fall back to 1:1 preset when invalid
+  let ratio: string = aspectRatio || "1:1"
+  let customSize: { width: number; height: number } | null = null
+  if (ratio === "custom") {
+    customSize = normalizeCustomSize(imageWidth, imageHeight)
+    if (!customSize) ratio = "1:1"
+  }
 
   const count = Math.min(Math.max(1, Number(slideCount) || 3), settings?.plan === "free" ? 5 : 10)
   const inputMode: "text_ready" | "raw_brief" = captionMode === "text_ready" ? "text_ready" : "raw_brief"
@@ -70,7 +82,9 @@ export async function POST(req: NextRequest) {
     userId,
     title: String(brief).slice(0, 80),
     brief,
-    aspectRatio: aspectRatio || "1:1",
+    aspectRatio: ratio,
+    imageWidth: customSize?.width ?? null,
+    imageHeight: customSize?.height ?? null,
     language: language || "id",
     slideCount: count,
     withSubject: !!withSubject,
@@ -84,6 +98,8 @@ export async function POST(req: NextRequest) {
     typographyStyle: typographyStyle || "auto",
     subjectImageUrl: subjectImageUrl || null,
     subjectStorageKey: subjectStorageKey || null,
+    backgroundImageUrl: backgroundImageUrl || null,
+    backgroundStorageKey: backgroundStorageKey || null,
     status: "generating",
   })
 
@@ -111,7 +127,10 @@ export async function POST(req: NextRequest) {
   }
   const positionHint = positionHints[textPosition] ?? ""
 
-  const imagePromptRule = `For "imagePrompt": describe the visual concept, scene, mood, lighting, composition, and objects. Style: ${styleHint}. Color palette: ${colorPalette?.join(", ") || "vibrant"}.${withSubject ? " Include a person/subject." : " No people."}${brandNote}${positionHint ? ` ${positionHint}` : ""} Do NOT include any text or words here — only the visual scene.`
+  const backgroundNote = backgroundImageUrl
+    ? " The design will be built on top of a background photo provided by the user — describe foreground elements, overlays, and text layout that complement an existing background rather than a full scene."
+    : ""
+  const imagePromptRule = `For "imagePrompt": describe the visual concept, scene, mood, lighting, composition, and objects. Style: ${styleHint}. Color palette: ${colorPalette?.join(", ") || "vibrant"}.${withSubject ? " Include a person/subject." : " No people."}${brandNote}${positionHint ? ` ${positionHint}` : ""}${backgroundNote} Do NOT include any text or words here — only the visual scene.`
 
   function cleanRaw(s: string): string {
     return s

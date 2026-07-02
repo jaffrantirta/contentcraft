@@ -7,11 +7,11 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "sonner"
-import { VIBES, COLOR_PALETTES, ASPECT_RATIOS, DESIGN_STYLES, TEXT_POSITIONS, TYPOGRAPHY_STYLES } from "@/lib/tokenrouter"
-import { Sparkles, Loader2, User, UserX, FileText, Lightbulb, Upload, X, Palette, Check } from "lucide-react"
+import { VIBES, COLOR_PALETTES, ASPECT_RATIOS, DESIGN_STYLES, TEXT_POSITIONS, TYPOGRAPHY_STYLES, CUSTOM_SIZE_MIN, CUSTOM_SIZE_MAX } from "@/lib/tokenrouter"
+import { Sparkles, Loader2, User, UserX, FileText, Lightbulb, Upload, X, Palette, Check, Ruler, ImageIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-type AspectRatioId = typeof ASPECT_RATIOS[number]["id"]
+type AspectRatioId = typeof ASPECT_RATIOS[number]["id"] | "custom"
 type VibeId = typeof VIBES[number]["id"]
 type PaletteId = typeof COLOR_PALETTES[number]["id"] | "custom"
 type StyleId = typeof DESIGN_STYLES[number]["id"]
@@ -23,6 +23,8 @@ interface FormState {
   slideBriefs: string[]
   inputMode: "text_ready" | "raw_brief"
   aspectRatio: AspectRatioId
+  customWidth: string
+  customHeight: string
   language: "id" | "en"
   slideCount: number
   withSubject: boolean
@@ -41,12 +43,18 @@ export default function CreatePage() {
   const [subjectStorageKey, setSubjectStorageKey] = useState<string | null>(null)
   const [uploadingSubject, setUploadingSubject] = useState(false)
   const subjectInputRef = useRef<HTMLInputElement>(null)
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null)
+  const [backgroundStorageKey, setBackgroundStorageKey] = useState<string | null>(null)
+  const [uploadingBackground, setUploadingBackground] = useState(false)
+  const backgroundInputRef = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState<FormState>({
     brief: "",
     slideBriefs: ["", "", ""],
     inputMode: "raw_brief",
     aspectRatio: "1:1",
+    customWidth: "1080",
+    customHeight: "1350",
     language: "id",
     slideCount: 3,
     withSubject: false,
@@ -108,6 +116,36 @@ export default function CreatePage() {
     setSubjectStorageKey(null)
   }
 
+  async function handleBackgroundFile(file: File) {
+    setUploadingBackground(true)
+    try {
+      const fd = new FormData()
+      fd.append("file", file)
+      const res = await fetch("/api/upload/background", { method: "POST", body: fd })
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error || "upload failed") }
+      const { url, key } = await res.json()
+      setBackgroundImageUrl(url)
+      setBackgroundStorageKey(key)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "upload failed")
+    } finally {
+      setUploadingBackground(false)
+      if (backgroundInputRef.current) backgroundInputRef.current.value = ""
+    }
+  }
+
+  async function removeBackgroundImage() {
+    if (backgroundStorageKey) {
+      await fetch("/api/upload/background", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: backgroundStorageKey }),
+      }).catch(() => {})
+    }
+    setBackgroundImageUrl(null)
+    setBackgroundStorageKey(null)
+  }
+
   async function handleGenerate() {
     if (!form.brief.trim()) {
       toast.error("please write a general brief first")
@@ -117,6 +155,17 @@ export default function CreatePage() {
       const missing = form.slideBriefs.slice(0, form.slideCount).some(b => !b.trim())
       if (missing) {
         toast.error("fill in the text for every slide")
+        return
+      }
+    }
+    let customW = 0
+    let customH = 0
+    if (form.aspectRatio === "custom") {
+      customW = Math.round(Number(form.customWidth))
+      customH = Math.round(Number(form.customHeight))
+      const valid = (n: number) => Number.isFinite(n) && n >= CUSTOM_SIZE_MIN && n <= CUSTOM_SIZE_MAX
+      if (!valid(customW) || !valid(customH)) {
+        toast.error(`custom size must be between ${CUSTOM_SIZE_MIN} and ${CUSTOM_SIZE_MAX}px`)
         return
       }
     }
@@ -133,6 +182,8 @@ export default function CreatePage() {
           slideBriefs: form.slideBriefs,
           captionMode: form.inputMode,
           aspectRatio: form.aspectRatio,
+          imageWidth: form.aspectRatio === "custom" ? customW : undefined,
+          imageHeight: form.aspectRatio === "custom" ? customH : undefined,
           language: form.language,
           slideCount: form.slideCount,
           withSubject: form.withSubject,
@@ -143,6 +194,8 @@ export default function CreatePage() {
           typographyStyle: form.typographyStyle,
           subjectImageUrl: subjectImageUrl || null,
           subjectStorageKey: subjectStorageKey || null,
+          backgroundImageUrl: backgroundImageUrl || null,
+          backgroundStorageKey: backgroundStorageKey || null,
         }),
       })
 
@@ -232,9 +285,9 @@ export default function CreatePage() {
 
       <Separator />
 
-      {/* aspect ratio */}
+      {/* aspect ratio + size */}
       <div className="space-y-3">
-        <Label className="text-xs font-medium">post ratio</Label>
+        <Label className="text-xs font-medium">post ratio & size</Label>
         <div className="grid grid-cols-2 gap-2">
           {ASPECT_RATIOS.map(r => (
             <button
@@ -249,9 +302,57 @@ export default function CreatePage() {
             >
               <p className="text-xs font-medium">{r.label}</p>
               <p className="text-[10px] text-muted-foreground mt-0.5">{r.description}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">{r.width}×{r.height}px</p>
             </button>
           ))}
+
+          {/* custom size */}
+          <button
+            onClick={() => set("aspectRatio", "custom")}
+            className={cn(
+              "p-3 rounded-lg border text-left transition-colors",
+              form.aspectRatio === "custom"
+                ? "border-primary bg-primary/5"
+                : "border-border/60 hover:border-border bg-card"
+            )}
+          >
+            <p className="text-xs font-medium flex items-center gap-1"><Ruler className="h-3 w-3" /> custom</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5">set your own width × height</p>
+            <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">{form.customWidth || "?"}×{form.customHeight || "?"}px</p>
+          </button>
         </div>
+
+        {/* custom size inputs */}
+        {form.aspectRatio === "custom" && (
+          <div className="rounded-lg border border-border/60 bg-card p-3 space-y-2">
+            <p className="text-[10px] text-muted-foreground">size in pixels ({CUSTOM_SIZE_MIN}–{CUSTOM_SIZE_MAX}px)</p>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 space-y-1">
+                <p className="text-[10px] font-medium text-muted-foreground">width</p>
+                <input
+                  type="number"
+                  min={CUSTOM_SIZE_MIN}
+                  max={CUSTOM_SIZE_MAX}
+                  value={form.customWidth}
+                  onChange={e => set("customWidth", e.target.value)}
+                  className="w-full text-xs rounded-lg border border-border/60 bg-background px-3 py-2 font-mono"
+                />
+              </div>
+              <span className="text-xs text-muted-foreground mt-4">×</span>
+              <div className="flex-1 space-y-1">
+                <p className="text-[10px] font-medium text-muted-foreground">height</p>
+                <input
+                  type="number"
+                  min={CUSTOM_SIZE_MIN}
+                  max={CUSTOM_SIZE_MAX}
+                  value={form.customHeight}
+                  onChange={e => set("customHeight", e.target.value)}
+                  className="w-full text-xs rounded-lg border border-border/60 bg-background px-3 py-2 font-mono"
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* language + slides */}
@@ -406,6 +507,48 @@ export default function CreatePage() {
           />
         </div>
       )}
+
+      {/* background image upload — optional */}
+      <div className="space-y-2">
+        <Label className="text-xs font-medium">background image <span className="text-muted-foreground font-normal">(optional)</span></Label>
+        <p className="text-[10px] text-muted-foreground">upload the background you want — AI will design the slides on top of it</p>
+
+        {backgroundImageUrl ? (
+          <div className="relative w-full rounded-lg overflow-hidden border border-border/60 bg-muted/30">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={backgroundImageUrl} alt="background" className="w-full max-h-40 object-cover" />
+            <button
+              onClick={removeBackgroundImage}
+              className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+            <div className="px-3 py-2 text-[10px] text-muted-foreground flex items-center gap-1"><Check className="h-3 w-3 text-green-500" /> background image uploaded</div>
+          </div>
+        ) : (
+          <button
+            onClick={() => backgroundInputRef.current?.click()}
+            disabled={uploadingBackground}
+            className="w-full border-2 border-dashed border-border/60 hover:border-border rounded-lg p-4 flex flex-col items-center gap-1.5 transition-colors bg-card"
+          >
+            {uploadingBackground
+              ? <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
+              : <ImageIcon className="h-5 w-5 text-muted-foreground" />
+            }
+            <span className="text-xs text-muted-foreground">
+              {uploadingBackground ? "uploading..." : "click to upload background image"}
+            </span>
+            <span className="text-[10px] text-muted-foreground">PNG, JPG, WebP · max 5MB</span>
+          </button>
+        )}
+        <input
+          ref={backgroundInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/jpg,image/webp"
+          className="hidden"
+          onChange={e => e.target.files?.[0] && handleBackgroundFile(e.target.files[0])}
+        />
+      </div>
 
       <Separator />
 

@@ -75,8 +75,30 @@ export const TYPOGRAPHY_STYLES: { id: string; label: string; icon: LucideIcon; d
 ]
 
 export const ASPECT_RATIOS = [
-  { id: "1:1", label: "square", description: "1:1 — instagram post", width: 1024, height: 1024 },
-  { id: "4:5", label: "portrait", description: "4:5 — instagram portrait", width: 896, height: 1120 },
-  { id: "9:16", label: "story", description: "9:16 — reels / story", width: 576, height: 1024 },
-  { id: "16:9", label: "landscape", description: "16:9 — youtube / linkedin", width: 1024, height: 576 },
+  { id: "1:1", label: "square", description: "1:1 — instagram post", width: 1080, height: 1080 },
+  { id: "4:5", label: "portrait", description: "4:5 — instagram portrait", width: 1080, height: 1350 },
+  { id: "4:3", label: "banner", description: "4:3 — landscape banner", width: 1440, height: 1080 },
+  { id: "9:16", label: "story", description: "9:16 — reels / story", width: 1080, height: 1920 },
+  { id: "16:9", label: "landscape", description: "16:9 — youtube / linkedin", width: 1920, height: 1080 },
 ] as const
+
+export const CUSTOM_SIZE_MIN = 256
+export const CUSTOM_SIZE_MAX = 2048
+
+// Validates a user-supplied custom size; returns null when out of range or not a number.
+export function normalizeCustomSize(width: unknown, height: unknown): { width: number; height: number } | null {
+  const w = Math.round(Number(width))
+  const h = Math.round(Number(height))
+  if (!Number.isFinite(w) || !Number.isFinite(h)) return null
+  if (w < CUSTOM_SIZE_MIN || w > CUSTOM_SIZE_MAX || h < CUSTOM_SIZE_MIN || h > CUSTOM_SIZE_MAX) return null
+  return { width: w, height: h }
+}
+
+// Resolves the exact output dimensions for a post (preset ratio or custom size).
+export function resolveTargetSize(aspectRatio: string, imageWidth?: number | null, imageHeight?: number | null): { width: number; height: number } {
+  if (aspectRatio === "custom" && imageWidth && imageHeight) {
+    return { width: imageWidth, height: imageHeight }
+  }
+  const preset = ASPECT_RATIOS.find(r => r.id === aspectRatio)
+  return preset ? { width: preset.width, height: preset.height } : { width: 1080, height: 1080 }
+}
